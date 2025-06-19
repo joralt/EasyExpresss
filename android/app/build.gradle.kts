@@ -2,14 +2,15 @@ plugins {
     id("com.android.application")
     id("kotlin-android")
     id("com.google.gms.google-services") // Plugin de servicios de Google
-    // El plugin de Flutter debe ir después
-    id("dev.flutter.flutter-gradle-plugin")
+    id("dev.flutter.flutter-gradle-plugin") // Flutter debe ir después
 }
 
 android {
     namespace = "com.example.easyexpres"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+
+    // ✅ NDK actualizado
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -22,8 +23,11 @@ android {
 
     defaultConfig {
         applicationId = "com.example.easyexpres"
-        minSdk = flutter.minSdkVersion
+
+        // ✅ minSdk actualizado a 23 por requerimiento de firebase-auth 23.x
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
+
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -40,14 +44,14 @@ flutter {
 }
 
 dependencies {
-    // Importa el BoM de Firebase
+    // ✅ Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:33.15.0"))
 
-    // Añade los servicios de Firebase que necesites
+    // ✅ Servicios Firebase utilizados
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-storage")
 }
 
-// Aplica el plugin de Google Services al final
+// ✅ Aplica el plugin de Google Services al final
 apply(plugin = "com.google.gms.google-services")
