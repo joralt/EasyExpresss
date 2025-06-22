@@ -1,12 +1,15 @@
-// home.dart
+// lib/home.dart
 import 'package:flutter/material.dart';
+import 'favorites_tab.dart';
+import 'orders_tab.dart';
+import 'account_tab.dart';
 
 class HomeScreen extends StatefulWidget {
-  final Map<String, dynamic> userData;  // ① campo
+  final Map<String, dynamic> userData;
 
   const HomeScreen({
     Key? key,
-    required this.userData,             // ② constructor
+    required this.userData,
   }) : super(key: key);
 
   @override
@@ -19,15 +22,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       body: SafeArea(
         child: IndexedStack(
           index: _currentIndex,
           children: [
             _buildHomeTab(),
-            _buildPlaceholderTab('Favoritos'),
-            _buildPlaceholderTab('Pedidos'),
-            _buildPlaceholderTab('Mi Cuenta'),
+            const FavoritesTab(),
+            const OrdersTab(),
+            const AccountTab(),
           ],
         ),
       ),
@@ -48,6 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildHomeTab() {
+    // ... tu implementación existente del tab de inicio
     final name = widget.userData['Nombres'] ?? 'Usuario';
     final address = widget.userData['Direccion'] ?? 'Dirección no disponible';
     final photoUrl = widget.userData['Foto'] as String?;
