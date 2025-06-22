@@ -1,47 +1,20 @@
-// home_screen.dart
-import 'dart:async';
+// home.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-
 
 class HomeScreen extends StatefulWidget {
-  final Map<String, dynamic> userData;
+  final Map<String, dynamic> userData;  // ① campo
 
-  const HomeScreen({super.key, required this.userData});
+  const HomeScreen({
+    Key? key,
+    required this.userData,             // ② constructor
+  }) : super(key: key);
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  late PageController _pageController;
-  Timer? _timer;
   int _currentIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController(initialPage: 0);
-    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (_pageController.hasClients) {
-        int next = (_pageController.page?.toInt() ?? 0) + 1;
-        if (next >= 3) next = 0;
-        _pageController.animateToPage(
-          next,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    _timer?.cancel();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,266 +24,203 @@ class _HomeScreenState extends State<HomeScreen> {
         child: IndexedStack(
           index: _currentIndex,
           children: [
-            _buildHomePage(),
-            FavoritesScreen(correo: widget.userData['Correo']),
-            OrdersScreen(userId: widget.userData['Correo']),
-            AccountScreen(userData: widget.userData),
+            _buildHomeTab(),
+            _buildPlaceholderTab('Favoritos'),
+            _buildPlaceholderTab('Pedidos'),
+            _buildPlaceholderTab('Mi Cuenta'),
           ],
         ),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
+        type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFF228B22),
         unselectedItemColor: Colors.grey,
         onTap: (i) => setState(() => _currentIndex = i),
-        items: [
-          _navItem('assets/h.png', 'Inicio', 0),
-          _navItem('assets/f.png', 'Favoritos', 1),
-          _navItem('assets/p.png', 'Pedidos', 2),
-          _navItem('assets/c.png', 'Cuenta', 3),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Favoritos'),
+          BottomNavigationBarItem(icon: Icon(Icons.shopping_bag), label: 'Pedidos'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Cuenta'),
         ],
       ),
     );
   }
 
-  BottomNavigationBarItem _navItem(String asset, String label, int idx) {
-    return BottomNavigationBarItem(
-      icon: Image.asset(
-        asset,
-        width: 24,
-        height: 24,
-        color: _currentIndex == idx ? const Color(0xFF228B22) : Colors.grey,
-      ),
-      label: label,
-    );
-  }
+  Widget _buildHomeTab() {
+    final name = widget.userData['Nombres'] ?? 'Usuario';
+    final address = widget.userData['Direccion'] ?? 'Dirección no disponible';
+    final photoUrl = widget.userData['Foto'] as String?;
 
-  Widget _buildHomePage() {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
-          const SizedBox(height: 10),
+          // **Header** con datos reales
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                          ? NetworkImage(photoUrl)
+                          : null,
+                      backgroundColor: Colors.grey[300],
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Hola, $name',
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text(address,
+                            style: const TextStyle(color: Colors.black54)),
+                      ],
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.shopping_cart_outlined),
+                      onPressed: () {},
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.notifications_none_outlined),
+                      onPressed: () {},
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
           _buildSearchBar(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           _buildPromotionCarousel(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           _buildSectionTitle('Categorías'),
           _buildCategories(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           _buildSectionTitle('Recomendado para ti'),
-          // Placeholder for recommended
-          const SizedBox(height: 20),
+          _buildRecommendations(),
+          const SizedBox(height: 24),
           _buildSectionTitle('Te puede interesar'),
-          // Placeholder for interests
+          _buildRecommendations(),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
-    final name = widget.userData['Nombres'] ?? 'Usuario';
-    final photo = widget.userData['Foto'] as String?;
-    final address = widget.userData['location'] != null
-        ? '${(widget.userData['location'] as GeoPoint).latitude.toStringAsFixed(4)}, ${(widget.userData['location'] as GeoPoint).longitude.toStringAsFixed(4)}'
-        : 'Dirección no disponible';
+  Widget _buildSearchBar() => const Padding(
+    padding: EdgeInsets.symmetric(horizontal: 16),
+    child: TextField(
+      decoration: InputDecoration(
+        hintText: 'Buscar local, comida o producto…',
+        prefixIcon: Icon(Icons.search),
+        filled: true,
+        fillColor: Color(0xFFF0F0F0),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+            borderSide: BorderSide.none),
+      ),
+    ),
+  );
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 25,
-                backgroundImage: photo != null && photo.isNotEmpty
-                    ? NetworkImage(photo)
-                    : const AssetImage('assets/user.png') as ImageProvider,
-              ),
-              const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Hola, $name', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text(address, style: const TextStyle(color: Colors.black54)),
-                ],
-              ),
-            ],
-          ),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart_outlined, size: 30),
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => CartScreen(userId: widget.userData['Correo']),
-                  ));
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.notifications_none_outlined, size: 30),
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => NotificationsScreen(userData: widget.userData),
-                  ));
-                },
-              ),
-            ],
-          ),
-        ],
+  Widget _buildPromotionCarousel() => SizedBox(
+    height: 150,
+    child: PageView.builder(
+      itemCount: 3,
+      itemBuilder: (_, i) => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: Colors.grey.shade300,
+        ),
+        child: Center(
+          child: Text('Promo ${i + 1}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildSectionTitle(String title) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    child: Text(title,
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+  );
+
+  Widget _buildCategories() {
+    final cats = ['Restaurantes', 'Rápida', 'Picanterías', 'Tiendas'];
+    return SizedBox(
+      height: 100,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: cats.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemBuilder: (_, i) => Column(
+          children: [
+            Container(
+              width: 60,
+              height: 60,
+              decoration: const BoxDecoration(
+                  color: Color(0xFFE0E0E0), shape: BoxShape.circle),
+              child: Center(child: Text(cats[i][0])),
+            ),
+            const SizedBox(height: 8),
+            Text(cats[i]),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildSearchBar() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: TextField(
-        onChanged: (v) {},
-        decoration: InputDecoration(
-          hintText: 'Local, comida o producto favorito',
-          prefixIcon: const Icon(Icons.search, color: Colors.grey),
-          filled: true,
-          fillColor: Colors.grey[200],
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16.0),
-            borderSide: BorderSide.none,
+  Widget _buildRecommendations() {
+    return SizedBox(
+      height: 180,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: 2,
+        separatorBuilder: (_, __) => const SizedBox(width: 16),
+        itemBuilder: (_, __) => Card(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: SizedBox(
+            width: 200,
+            child: Column(
+              children: const [
+                Expanded(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                        color: Color(0xFFE0E0E0),
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(16))),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Text('Producto',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildPromotionCarousel() {
-    // Placeholder container
-    return SizedBox(
-      height: 150,
-      child: PageView(
-        controller: _pageController,
-        children: List.generate(3, (i) => Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: Colors.grey[300],
-          ),
-          child: Center(child: Text('Promo ${i+1}')), 
-        )),
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _buildCategories() {
-    // Placeholder row
-    return SizedBox(
-      height: 100,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        children: List.generate(6, (i) => Container(
-          width: 80,
-          margin: const EdgeInsets.only(right: 16),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.grey[200],
-          ),
-          child: Center(child: Text('Cat ${i+1}')),
-        )),
-      ),
-    );
-  }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-class NotificationsScreen extends StatelessWidget {
-  final Map<String, dynamic> userData;
-  const NotificationsScreen({super.key, required this.userData});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Notificaciones')),
-      body: Center(child: Text('Notificaciones para ${userData['Nombres']}')),
-    );
-  }
-}
-
-
-
-class CartScreen extends StatelessWidget {
-  final String userId;
-  const CartScreen({super.key, required this.userId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Carrito')),
-      body: Center(child: Text('Carrito de $userId')),
-    );
-  }
-}
-
-
-class AccountScreen extends StatelessWidget {
-  final Map<String, dynamic> userData;
-  const AccountScreen({super.key, required this.userData});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Mi Cuenta')),
-      body: Center(child: Text('Cuenta de ${userData['Nombres']}')),
-    );
-  }
-}
-
-
-class OrdersScreen extends StatelessWidget {
-  final String userId;
-  const OrdersScreen({super.key, required this.userId});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Pedidos')),
-      body: Center(child: Text('Aquí irán los pedidos de $userId')),
-    );
-  }
-}
-
-class FavoritesScreen extends StatelessWidget {
-  final String correo;
-  const FavoritesScreen({super.key, required this.correo});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Favoritos')),
-      body: Center(child: Text('Aquí irán los favoritos de $correo')),
-    );
-  }
+  Widget _buildPlaceholderTab(String label) =>
+      Center(child: Text(label, style: const TextStyle(fontSize: 24)));
 }

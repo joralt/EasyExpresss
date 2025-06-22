@@ -174,7 +174,7 @@ class _InfoPageState extends State<InfoPage> {
               style: ElevatedButton.styleFrom(
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
               ),
-              child: const Text('Guardar datos', style: TextStyle(fontSize: 18)),
+              child: const Text('Continuar', style: TextStyle(fontSize: 18)),
             ),
           ),
         ],
