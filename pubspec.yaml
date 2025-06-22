@@ -35,3 +35,17 @@ flutter:
 
   assets:
   - assets/logo.png
+  - assets/vacio.png
+  - assets/local.png
+  - assets/scooter.png
+  - assets/historial.png
+  - assets/piocanteria.png
+  - assets/heladeria.png
+  - assets/licor.png
+  - assets/rapida.png
+  - assets/restaurante.png
+  - assets/tienda.png
+  - assets/farmacia.png
+  - assets/car.png
+  - assets/silencio.png
+  - assets/direc.png

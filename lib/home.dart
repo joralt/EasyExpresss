@@ -1,8 +1,9 @@
-// lib/home.dart
 import 'package:flutter/material.dart';
 import 'favorites_tab.dart';
 import 'orders_tab.dart';
-import 'account_tab.dart';
+import 'account/account_tab.dart';
+import 'car.dart';
+import 'notification.dart';
 
 class HomeScreen extends StatefulWidget {
   final Map<String, dynamic> userData;
@@ -27,9 +28,9 @@ class _HomeScreenState extends State<HomeScreen> {
           index: _currentIndex,
           children: [
             _buildHomeTab(),
-            const FavoritesTab(),
-            const OrdersTab(),
-            const AccountTab(),
+              FavoritosScreen(),
+              PedidosScreen(),
+              AccountTab(),
           ],
         ),
       ),
@@ -89,20 +90,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
                 Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.shopping_cart_outlined),
-                      onPressed: () {},
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.notifications_none_outlined),
-                      onPressed: () {},
-                    ),
-                  ],
-                ),
-              ],
-            ),
+  children: [
+    IconButton(
+      icon: const Icon(Icons.shopping_cart_outlined),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const CartScreen(), // tu pantalla de carrito
           ),
+        );
+      },
+    ),
+    IconButton(
+      icon: const Icon(Icons.notifications_none_outlined),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const NotificationsScreen(), // tu pantalla de notificaciones
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    ], 
+  ), 
+),
 
           const SizedBox(height: 16),
           _buildSearchBar(),
@@ -119,7 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildRecommendations(),
         ],
       ),
-    );
+    ); 
   }
 
   Widget _buildSearchBar() => const Padding(
@@ -161,31 +176,52 @@ class _HomeScreenState extends State<HomeScreen> {
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
   );
 
-  Widget _buildCategories() {
-    final cats = ['Restaurantes', 'Rápida', 'Picanterías', 'Tiendas'];
-    return SizedBox(
-      height: 100,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: cats.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 16),
-        itemBuilder: (_, i) => Column(
+Widget _buildCategories() {
+  final categories = [
+    {'label': 'Restaurantes',  'icon': 'assets/restaurante.png'},
+    {'label': 'Tiendas',       'icon': 'assets/tienda.png'},
+    {'label': 'Rápida',        'icon': 'assets/rapida.png'},
+    {'label': 'Picanterías',   'icon': 'assets/piocanteria.png'},
+    {'label': 'Tiendas',       'icon': 'assets/heladeria.png'},
+    {'label': 'Tiendas',       'icon': 'assets/farmacia.png'},
+    {'label': 'Tiendas',       'icon': 'assets/licor.png'},
+
+  ];
+
+  return SizedBox(
+    height: 100,
+    child: ListView.separated(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      itemCount: categories.length,
+      separatorBuilder: (_, __) => const SizedBox(width: 16),
+      itemBuilder: (_, i) {
+        final cat = categories[i];
+        return Column(
           children: [
             Container(
               width: 60,
               height: 60,
               decoration: const BoxDecoration(
-                  color: Color(0xFFE0E0E0), shape: BoxShape.circle),
-              child: Center(child: Text(cats[i][0])),
+                color: Color(0xFFE0E0E0),
+                shape: BoxShape.circle,
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  cat['icon']!,
+                  fit: BoxFit.cover,
+                ),
+              ),
             ),
             const SizedBox(height: 8),
-            Text(cats[i]),
+            Text(cat['label']!, style: const TextStyle(fontSize: 12)),
           ],
-        ),
-      ),
-    );
-  }
+        );
+      },
+    ),
+  );
+}
+
 
   Widget _buildRecommendations() {
     return SizedBox(
