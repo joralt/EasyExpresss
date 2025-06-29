@@ -1,4 +1,4 @@
-// main.dart
+import 'admin/admin_login.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -189,15 +189,18 @@ class _LoginPageState extends State<LoginPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("Ya tengo una cuenta?",
-                      style: TextStyle(color: textColor, fontSize: 16)),
                   TextButton(
-                    onPressed: () {
-                      // navegar a login tradicional
-                    },
-                    child: const Text("Entrar",
-                        style: TextStyle(color: linkColor, fontSize: 16)),
-                  ),
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+    );
+  },
+  child: const Text("Entrar",
+    style: TextStyle(color: linkColor, fontSize: 16)
+  ),
+),
+
                 ],
               ),
               const SizedBox(height: 20),

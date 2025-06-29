@@ -21,6 +21,9 @@ dependencies:
   latlong2: ^0.8.2     # <- baja de 0.9.0 a 0.8.2
   geolocator: ^9.0.2
   url_launcher: ^6.1.10
+  geocoding: ^4.0.0
+  image_picker: ^1.1.2
+  firebase_storage: ^11.7.7
 
 
 
@@ -49,3 +52,6 @@ flutter:
   - assets/car.png
   - assets/silencio.png
   - assets/direc.png
+  - assets/arestaurante.png
+  - assets/eliminar.png
+  - assets/edicion.png
