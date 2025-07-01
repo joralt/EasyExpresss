@@ -1,136 +1,211 @@
+import 'admin/admin_login.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'info.dart';
 
-// Asegúrate de que este archivo exista y esté generado correctamente
-import 'firebase_options.dart';
-
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  print(">> App iniciando...");
-
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-    print(">> Firebase inicializado correctamente");
-  } catch (e) {
-    print(">> Error al inicializar Firebase: $e");
-  }
-
-  runApp(MyApp());
+  await Firebase.initializeApp();
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
-    print(">> Ejecutando MyApp...");
     return MaterialApp(
       title: 'EasyExpress',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.red),
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          print(">> Estado del snapshot: ${snapshot.connectionState}");
-          print(">> Usuario logueado: ${snapshot.hasData}");
-
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return Scaffold(body: Center(child: CircularProgressIndicator()));
-          }
-          if (snapshot.hasData) {
-            return HomeScreen(); // Usuario autenticado
-          }
-          return AuthScreen(); // Usuario no autenticado
-        },
+      theme: ThemeData(
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+          bodyLarge: TextStyle(fontSize: 14),
+        ),
       ),
+      home: const LoginPage(),
     );
   }
 }
 
-class AuthScreen extends StatelessWidget {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
 
-  Future<User?> _signInWithGoogle(BuildContext context) async {
+class _LoginPageState extends State<LoginPage> {
+  static const Color lightBackground = Color(0xFFF5F5F5);
+  static const Color buttonGoogle     = Color(0xFFDB4437);
+  static const Color buttonFacebook   = Color(0xFF3b5998);
+  static const Color buttonOther      = Color(0xFF9E9E9E);
+  static const Color textColor        = Color(0xFF333333);
+  static const Color linkColor        = Color(0xFF6200EE);
+
+  bool _loading = false;
+
+  Future<void> signInWithGoogle() async {
+    setState(() => _loading = true);
     try {
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return null;
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return; // cancelado
 
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      final OAuthCredential credential = GoogleAuthProvider.credential(
+      final googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
+        idToken:     googleAuth.idToken,
       );
 
-      final UserCredential userCredential = await _auth.signInWithCredential(
-        credential,
-      );
+      final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+      final user     = userCred.user!;
 
-      print(
-        "Usuario autenticado con Google: ${userCredential.user?.displayName}",
+      // Guardamos en Firestore
+      final userDoc = FirebaseFirestore.instance.collection('usuarios').doc(user.uid);
+      await userDoc.set({
+        'email'      : user.email,
+        'displayName': user.displayName,
+        'photoURL'   : user.photoURL,
+        'lastLogin'  : FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // ¡Navega a InfoPage!
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const InfoPage()),
       );
-      return userCredential.user;
     } catch (e) {
-      print("Error al iniciar sesión con Google: $e");
-      return null;
+      debugPrint('Error en Google Sign-In: $e');
+    } finally {
+      setState(() => _loading = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Iniciar sesión')),
-      body: Center(
-        child: ElevatedButton.icon(
-          icon: Icon(Icons.login),
-          label: Text('Iniciar sesión con Google'),
-          onPressed: () async {
-            User? user = await _signInWithGoogle(context);
-            if (user != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Bienvenido, ${user.displayName}!')),
-              );
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('No se pudo iniciar sesión con Google')),
-              );
-            }
-          },
+  // Aquí el helper bien definido:
+  Widget _buildButton(
+    String text,
+    IconData icon,
+    Color backgroundColor, {
+    required VoidCallback onPressed, // parámetro nombrado
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      height: 60,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 28, color: Colors.white),
+        label: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30)),
+          elevation: 5,
+          shadowColor: Colors.black26,
         ),
       ),
     );
   }
-}
 
-class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Inicio'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.logout),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              await GoogleSignIn().signOut();
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text('Sesión cerrada')));
-            },
+      backgroundColor: lightBackground,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // Logo / header…
+              SizedBox(
+                height: 273,
+                width: double.infinity,
+                child: Image.asset('assets/logo.png', fit: BoxFit.cover),
+              ),
+              const SizedBox(height: 30),
+              Text(
+                'Elige cómo quieres ingresar',
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 30),
+
+              // GOOGLE
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: _buildButton(
+                  'Continuar con Google',
+                  Icons.login,
+                  buttonGoogle,
+                  onPressed: _loading ? () {} : signInWithGoogle,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // FACEBOOK
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: _buildButton(
+                  'Continuar con Facebook',
+                  Icons.facebook,
+                  buttonFacebook,
+                  onPressed: () {
+                    // tu lógica de Facebook
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // OTRO MÉTODO
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: _buildButton(
+                  'Otro método',
+                  Icons.person_add,
+                  buttonOther,
+                  onPressed: () {
+                    // tu lógica de otro método
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 30),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  'Al elegir ingresar con Google, Facebook, e-mail o celular, '
+                  'estás aceptando los términos y condiciones de uso y políticas '
+                  'de privacidad de EasyExpress.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton(
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+    );
+  },
+  child: const Text("Entrar",
+    style: TextStyle(color: linkColor, fontSize: 16)
+  ),
+),
+
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
-        ],
-      ),
-      body: Center(
-        child: Text(
-          'Hola, ${user?.displayName ?? 'Usuario'}',
-          style: TextStyle(fontSize: 20),
         ),
       ),
     );
