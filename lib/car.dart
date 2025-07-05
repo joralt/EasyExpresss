@@ -1,6 +1,6 @@
-// lib/cart/cart_screen.dart
 import 'package:flutter/material.dart';
-import '../orders_tab.dart'; // ajusta la ruta si fuera necesario
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../orders_tab.dart'; // ajusta la ruta según tu proyecto
 
 class CartScreen extends StatefulWidget {
   const CartScreen({Key? key}) : super(key: key);
@@ -14,12 +14,13 @@ class CartScreen extends StatefulWidget {
 
 class _CartScreenState extends State<CartScreen> {
   bool _confirmandoPedido = false;
-  bool _pedidoEntregado  = false;
+  bool _pedidoEntregado   = false;
 
   double get subtotal => CartScreen.cartItems.fold(
-      0.0,
-      (sum, item) =>
-          sum + (item['precio'] as double) * (item['qty'] as int));
+        0.0,
+        (sum, item) =>
+            sum + (item['precio'] as double) * (item['qty'] as int),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +46,6 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  /// Vista de carrito vacío
   Widget _buildEmpty() {
     return Center(
       child: Padding(
@@ -73,16 +73,14 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  /// Lista de productos en el carrito
   Widget _buildList(List<Map<String, dynamic>> items) {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
       itemCount: items.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (_, i) {
-        final it = items[i];
-        final lineTotal =
-            (it['precio'] as double) * (it['qty'] as int);
+        final it        = items[i];
+        final lineTotal = (it['precio'] as double) * (it['qty'] as int);
         return Card(
           margin: EdgeInsets.zero,
           child: ListTile(
@@ -95,9 +93,9 @@ class _CartScreenState extends State<CartScreen> {
                 '\$${it['precio'].toStringAsFixed(2)} x ${it['qty']} = \$${lineTotal.toStringAsFixed(2)}'),
             trailing: IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => setState(() {
-                CartScreen.cartItems.removeAt(i);
-              }),
+              onPressed: () => setState(
+                () => CartScreen.cartItems.removeAt(i),
+              ),
             ),
           ),
         );
@@ -105,7 +103,6 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  /// Resumen y botones de acción
   Widget _buildResumenYBotones() {
     final envio = 1.25 +
         (CartScreen.cartItems.length > 1
@@ -136,8 +133,9 @@ class _CartScreenState extends State<CartScreen> {
           // Botón Realizar / Confirmar
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  _confirmandoPedido ? Colors.orange : const Color(0xFF228B22),
+              backgroundColor: _confirmandoPedido
+                  ? Colors.orange
+                  : const Color(0xFF228B22),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -153,7 +151,6 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  /// Mensaje de confirmación con icono de check verde
   Widget _buildConfirmacion() {
     return Center(
       child: Column(
@@ -174,16 +171,14 @@ class _CartScreenState extends State<CartScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF228B22),
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: () {
-              // navegar a PedidosScreen
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const PedidosScreen()),
-              );
-            },
+            onPressed: () => Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const PedidosScreen()),
+            ),
             child: const Text('Ver Mis Pedidos',
                 style: TextStyle(color: Colors.white)),
           ),
@@ -192,19 +187,28 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  /// Lógica de Realizar / Confirmar Pedido
-  void _onRealizarOrConfirmar() {
+  Future<void> _onRealizarOrConfirmar() async {
     if (!_confirmandoPedido) {
-      // primer click → cambiar texto/color
+      // primer click: cambio el texto y color
       setState(() => _confirmandoPedido = true);
       return;
     }
 
-    // segundo click → crear el pedido
-    final order = {
-      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+    // segundo click → armo el pedido
+    final envio = 1.25 +
+        (CartScreen.cartItems.length > 1
+            ? 0.50 * (CartScreen.cartItems.length - 1)
+            : 0.0);
+    final orderId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    // 1) datos para Firestore
+    final orderData = {
+      'id': orderId,
       'status': 'En preparación',
-      'date': DateTime.now(),
+      'date': FieldValue.serverTimestamp(),
+      'subtotal': subtotal,
+      'envio': envio,
+      'total': subtotal + envio,
       'items': CartScreen.cartItems
           .map((it) => {
                 'nombre': it['nombre'],
@@ -214,13 +218,25 @@ class _CartScreenState extends State<CartScreen> {
               })
           .toList(),
     };
-    PedidosScreen.pedidosActuales.insert(0, order);
 
-    // limpiar
+    // 2) guardo en Firestore
+    await FirebaseFirestore.instance
+        .collection('PEDIDOS')
+        .doc(orderId)
+        .set(orderData);
+
+    // 3) guardo localmente con DateTime.now()
+    final localOrder = {
+      ...orderData,
+      'date': DateTime.now(),
+    };
+    PedidosScreen.pedidosActuales.insert(0, localOrder);
+
+    // 4) limpio y muestro confirmación
     setState(() {
       CartScreen.cartItems.clear();
       _confirmandoPedido = false;
-      _pedidoEntregado  = true;
+      _pedidoEntregado   = true;
     });
   }
 }
