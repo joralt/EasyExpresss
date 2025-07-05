@@ -13,7 +13,8 @@ class CartScreen extends StatefulWidget {
 }
 
 class _CartScreenState extends State<CartScreen> {
-  bool _pedidoConfirmado = false;
+  bool _confirmandoPedido = false;
+  bool _pedidoEntregado  = false;
 
   double get subtotal => CartScreen.cartItems.fold(
       0.0,
@@ -31,17 +32,20 @@ class _CartScreenState extends State<CartScreen> {
         foregroundColor: Colors.black,
         elevation: 1,
       ),
-      body: items.isEmpty
-          ? _buildEmpty()
-          : Column(
-              children: [
-                Expanded(child: _buildList(items)),
-                _buildResumenYBotones(),
-              ],
-            ),
+      body: _pedidoEntregado
+          ? _buildConfirmacion()
+          : items.isEmpty
+              ? _buildEmpty()
+              : Column(
+                  children: [
+                    Expanded(child: _buildList(items)),
+                    _buildResumenYBotones(),
+                  ],
+                ),
     );
   }
 
+  /// Vista de carrito vacío
   Widget _buildEmpty() {
     return Center(
       child: Padding(
@@ -69,6 +73,7 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
+  /// Lista de productos en el carrito
   Widget _buildList(List<Map<String, dynamic>> items) {
     return ListView.separated(
       padding: const EdgeInsets.all(16),
@@ -100,8 +105,8 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
+  /// Resumen y botones de acción
   Widget _buildResumenYBotones() {
-    // Envío base $1.25 + $0.50 extra por cada plato adicional
     final envio = 1.25 +
         (CartScreen.cartItems.length > 1
             ? 0.50 * (CartScreen.cartItems.length - 1)
@@ -132,14 +137,14 @@ class _CartScreenState extends State<CartScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor:
-                  _pedidoConfirmado ? Colors.orange : const Color(0xFF228B22),
+                  _confirmandoPedido ? Colors.orange : const Color(0xFF228B22),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: _onRealizarOrConfirmar,
             child: Text(
-              _pedidoConfirmado ? 'Confirmar Pedido' : 'Realizar Pedido',
+              _confirmandoPedido ? 'Confirmar Pedido' : 'Realizar Pedido',
               style: const TextStyle(fontSize: 16, color: Colors.white),
             ),
           ),
@@ -148,14 +153,54 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
+  /// Mensaje de confirmación con icono de check verde
+  Widget _buildConfirmacion() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 80),
+          const SizedBox(height: 16),
+          const Text(
+            '¡Pedido confirmado!',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Puedes verlo en Mis pedidos.',
+            style: TextStyle(fontSize: 16),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF228B22),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              // navegar a PedidosScreen
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const PedidosScreen()),
+              );
+            },
+            child: const Text('Ver Mis Pedidos',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Lógica de Realizar / Confirmar Pedido
   void _onRealizarOrConfirmar() {
-    if (!_pedidoConfirmado) {
-      // Paso 1: cambiar texto/color
-      setState(() => _pedidoConfirmado = true);
+    if (!_confirmandoPedido) {
+      // primer click → cambiar texto/color
+      setState(() => _confirmandoPedido = true);
       return;
     }
 
-    // Paso 2: confirmar
+    // segundo click → crear el pedido
     final order = {
       'id': DateTime.now().millisecondsSinceEpoch.toString(),
       'status': 'En preparación',
@@ -171,17 +216,11 @@ class _CartScreenState extends State<CartScreen> {
     };
     PedidosScreen.pedidosActuales.insert(0, order);
 
-    // vaciar carrito y reset
+    // limpiar
     setState(() {
       CartScreen.cartItems.clear();
-      _pedidoConfirmado = false;
+      _confirmandoPedido = false;
+      _pedidoEntregado  = true;
     });
-
-    // feedback al usuario
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('¡Pedido confirmado! Puedes verlo en Mis pedidos.'),
-      ),
-    );
   }
 }
