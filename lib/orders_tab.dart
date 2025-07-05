@@ -1,6 +1,13 @@
+// lib/orders_tab.dart  (o favorites_tab.dart según tu estructura)
 import 'package:flutter/material.dart';
 
 class PedidosScreen extends StatefulWidget {
+  const PedidosScreen({Key? key}) : super(key: key);
+
+  // Lista estática para compartir entre pantallas
+  static List<String> pedidosActuales = [];
+  static List<String> historialPedidos  = [];
+
   @override
   _PedidosScreenState createState() => _PedidosScreenState();
 }
@@ -9,10 +16,6 @@ class _PedidosScreenState extends State<PedidosScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  // Listas simuladas
-  List<String> pedidosActuales = []; // pedidos en curso
-  List<String> historialPedidos = []; // pedidos completados
-
   @override
   void initState() {
     super.initState();
@@ -20,29 +23,17 @@ class _PedidosScreenState extends State<PedidosScreen>
   }
 
   Widget buildVacio({required String tipo}) {
-    final String rutaImagen = tipo == 'actual'
-        ? 'assets/scooter.png'
-        : 'assets/historial.png';
-
-    final String mensaje = tipo == 'actual'
+    final rutaImagen = tipo == 'actual' ? 'assets/scooter.png' : 'assets/historial.png';
+    final mensaje = tipo == 'actual'
         ? 'No tienes pedidos en curso'
         : 'Tu historial de pedidos está vacío';
-
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(
-            rutaImagen,
-            width: 200,
-            height: 200,
-            fit: BoxFit.contain,
-          ),
+          Image.asset(rutaImagen, width: 200, height: 200, fit: BoxFit.contain),
           const SizedBox(height: 20),
-          Text(
-            mensaje,
-            style: const TextStyle(fontSize: 16, color: Colors.grey),
-          ),
+          Text(mensaje, style: const TextStyle(fontSize: 16, color: Colors.grey)),
         ],
       ),
     );
@@ -50,13 +41,12 @@ class _PedidosScreenState extends State<PedidosScreen>
 
   Widget buildListaPedidos(List<String> pedidos, String tipo) {
     if (pedidos.isEmpty) return buildVacio(tipo: tipo);
-
     return ListView.builder(
       itemCount: pedidos.length,
-      itemBuilder: (context, index) {
+      itemBuilder: (context, i) {
         return ListTile(
           leading: Icon(tipo == 'actual' ? Icons.delivery_dining : Icons.receipt_long),
-          title: Text(pedidos[index]),
+          title: Text(pedidos[i]),
           subtitle: Text(tipo == 'actual'
               ? 'En preparación o camino'
               : 'Entregado correctamente'),
@@ -76,18 +66,18 @@ class _PedidosScreenState extends State<PedidosScreen>
         elevation: 1,
         bottom: TabBar(
           controller: _tabController,
+          indicatorColor: Colors.green,
           tabs: const [
             Tab(child: Text("Pedidos actuales", style: TextStyle(color: Colors.black))),
-            Tab(child: Text("Historial", style: TextStyle(color: Colors.black))),
+            Tab(child: Text("Historial",       style: TextStyle(color: Colors.black))),
           ],
-          indicatorColor: Colors.green,
         ),
       ),
       body: TabBarView(
         controller: _tabController,
         children: [
-          buildListaPedidos(pedidosActuales, 'actual'),
-          buildListaPedidos(historialPedidos, 'historial'),
+          buildListaPedidos(PedidosScreen.pedidosActuales, 'actual'),
+          buildListaPedidos(PedidosScreen.historialPedidos, 'historial'),
         ],
       ),
     );

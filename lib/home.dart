@@ -1,3 +1,4 @@
+// lib/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -28,9 +29,9 @@ class _HomeScreenState extends State<HomeScreen> {
           index: _currentIndex,
           children: [
             _buildHomeTab(),
-            FavoritosScreen(), // sin const para refrescar
+             FavoritosScreen(), // refresca al volver
             PedidosScreen(),
-            AccountTab(),
+            const AccountTab(),
           ],
         ),
       ),
@@ -41,10 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: Colors.grey,
         onTap: (i) => setState(() => _currentIndex = i),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home),           label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite),       label: 'Favoritos'),
-          BottomNavigationBarItem(icon: Icon(Icons.shopping_bag),  label: 'Pedidos'),
-          BottomNavigationBarItem(icon: Icon(Icons.person),         label: 'Cuenta'),
+          BottomNavigationBarItem(icon: Icon(Icons.home),      label: 'Inicio'),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite),  label: 'Favoritos'),
+          BottomNavigationBarItem(icon: Icon(Icons.shopping_bag), label: 'Pedidos'),
+          BottomNavigationBarItem(icon: Icon(Icons.person),    label: 'Cuenta'),
         ],
       ),
     );
@@ -158,12 +159,12 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCategories() {
     final categories = [
       {'icon': 'assets/restaurante.png', 'label': 'Restaurantes'},
-      {'icon': 'assets/rapida.png', 'label': 'Rápida'},
+      {'icon': 'assets/rapida.png',      'label': 'Rápida'},
       {'icon': 'assets/piocanteria.png', 'label': 'Picanterías'},
-      {'icon': 'assets/tienda.png', 'label': 'Tiendas'},
-      {'icon': 'assets/farmacia.png', 'label': 'Farmacias'},
-      {'icon': 'assets/heladeria.png', 'label': 'Heladerias'},
-      {'icon': 'assets/licor.png', 'label': 'Licorerías'},
+      {'icon': 'assets/tienda.png',      'label': 'Tiendas'},
+      {'icon': 'assets/farmacia.png',    'label': 'Farmacias'},
+      {'icon': 'assets/heladeria.png',   'label': 'Heladerías'},
+      {'icon': 'assets/licor.png',       'label': 'Licorerías'},
     ];
     return Padding(
       padding: const EdgeInsets.only(left: 16),
@@ -177,8 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) =>
-                          CategoriaScreen(categoria: cat['label']!)),
+                      builder: (_) => CategoriaScreen(categoria: cat['label']!)),
                 ),
                 child: Column(
                   children: [
@@ -211,9 +211,8 @@ class _HomeScreenState extends State<HomeScreen> {
       child: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('LOCALES').snapshots(),
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
+          if (snap.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
-          }
           final docs = snap.data?.docs ?? [];
           if (docs.isEmpty) return const Center(child: Text('No hay locales'));
           return ListView.separated(
@@ -224,16 +223,19 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (_, i) {
               final d = docs[i].data() as Map<String, dynamic>;
               return _LocaleCard(
-                localId: docs[i].id,
-                nombre: d['Nombre'] ?? 'Sin nombre',
-                categoria: d['Categoria'] ?? '',
-                imagenUrl: d['Imagen'] ?? '',
+                localId:   docs[i].id,
+                nombre:    d['Nombre']    as String? ?? 'Sin nombre',
+                categoria: d['Categoria'] as String? ?? '',
+                imagenUrl: d['Imagen']    as String? ?? '',
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => LocalDetailScreen(
-                          localId: docs[i].id,
-                          localName: d['Nombre'] ?? ''))),
+                    builder: (_) => LocalDetailScreen(
+                      localId: docs[i].id,
+                      localName: d['Nombre'] as String? ?? '',
+                    ),
+                  ),
+                ),
               );
             },
           );
@@ -251,9 +253,8 @@ class _HomeScreenState extends State<HomeScreen> {
             .limit(10)
             .snapshots(),
         builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
+          if (snap.connectionState == ConnectionState.waiting)
             return const Center(child: CircularProgressIndicator());
-          }
           final docs = snap.data?.docs ?? [];
           if (docs.isEmpty) return const Center(child: Text('No hay platos'));
           return ListView.separated(
@@ -264,11 +265,18 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (_, i) {
               final d = docs[i].data() as Map<String, dynamic>;
               return _PlatoCard(
-                nombre: d['nombre'] ?? 'Sin nombre',
-                precio: (d['precio'] ?? 0).toDouble(),
-                imagenUrl: d['imagen'] ?? '',
-                onTap: () {
-                  // futuro: agregar al carrito
+                nombre:    d['nombre'] as String? ?? 'Sin nombre',
+                precio:    (d['precio'] ?? 0).toDouble(),
+                imagenUrl: d['imagen'] as String? ?? '',
+                onAdd: () {
+                  // **Sólo añade al carrito**:
+                  CartScreen.cartItems.add({
+                    'nombre':    d['nombre'],
+                    'imagenUrl': d['imagen'],
+                    'precio':    (d['precio'] ?? 0).toDouble(),
+                    'qty':       1,
+                  });
+                  setState(() {}); // refresca icono del carrito si lo tienes
                 },
               );
             },
@@ -279,6 +287,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+/// ─────────────────────────────────────────────────────────
+/// Tarjeta de Local con ❤️
 class _LocaleCard extends StatefulWidget {
   final String localId, nombre, categoria, imagenUrl;
   final VoidCallback onTap;
@@ -289,8 +299,7 @@ class _LocaleCard extends StatefulWidget {
     required this.imagenUrl,
     required this.onTap,
   });
-  @override
-  __LocaleCardState createState() => __LocaleCardState();
+  @override __LocaleCardState createState() => __LocaleCardState();
 }
 
 class __LocaleCardState extends State<_LocaleCard> {
@@ -324,8 +333,7 @@ class __LocaleCardState extends State<_LocaleCard> {
     return GestureDetector(
       onTap: widget.onTap,
       child: Card(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         clipBehavior: Clip.hardEdge,
         child: SizedBox(
           width: 200,
@@ -344,9 +352,7 @@ class __LocaleCardState extends State<_LocaleCard> {
                     child: GestureDetector(
                       onTap: _toggleFavorito,
                       child: Icon(
-                        isFavorito
-                            ? Icons.favorite
-                            : Icons.favorite_border,
+                        isFavorito ? Icons.favorite : Icons.favorite_border,
                         color: isFavorito ? Colors.red : Colors.white,
                       ),
                     ),
@@ -375,18 +381,19 @@ class __LocaleCardState extends State<_LocaleCard> {
   }
 }
 
+/// ─────────────────────────────────────────────────────────
+/// Tarjeta de Plato con ❤️ + ➕
 class _PlatoCard extends StatefulWidget {
   final String nombre, imagenUrl;
   final double precio;
-  final VoidCallback onTap;
+  final VoidCallback onAdd;
   const _PlatoCard({
     required this.nombre,
     required this.precio,
     required this.imagenUrl,
-    required this.onTap,
+    required this.onAdd,
   });
-  @override
-  __PlatoCardState createState() => __PlatoCardState();
+  @override __PlatoCardState createState() => __PlatoCardState();
 }
 
 class __PlatoCardState extends State<_PlatoCard> {
@@ -417,8 +424,7 @@ class __PlatoCardState extends State<_PlatoCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       clipBehavior: Clip.hardEdge,
       child: SizedBox(
         width: 200,
@@ -431,24 +437,22 @@ class __PlatoCardState extends State<_PlatoCard> {
                       ? Image.network(widget.imagenUrl, fit: BoxFit.cover)
                       : Container(color: Colors.grey.shade300),
                 ),
+                // ❤️ FAVORITO
                 Positioned(
-                  top: 8,
-                  left: 8,
+                  top: 8, left: 8,
                   child: GestureDetector(
                     onTap: _toggleFavorito,
                     child: Icon(
-                      isFavorito
-                          ? Icons.favorite
-                          : Icons.favorite_border,
+                      isFavorito ? Icons.favorite : Icons.favorite_border,
                       color: isFavorito ? Colors.red : Colors.white,
                     ),
                   ),
                 ),
+                // ➕ AÑADIR AL CARRITO
                 Positioned(
-                  top: 8,
-                  right: 8,
+                  top: 8, right: 8,
                   child: GestureDetector(
-                    onTap: widget.onTap,
+                    onTap: widget.onAdd,
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white70,
@@ -462,18 +466,18 @@ class __PlatoCardState extends State<_PlatoCard> {
               ]),
             ),
             Padding(
-	            padding: const EdgeInsets.all(8),
-	            child: Column(
-	              crossAxisAlignment: CrossAxisAlignment.start,
-	              children: [
-	                Text(widget.nombre,
-	                    style: const TextStyle(fontWeight: FontWeight.bold)),
-	                const SizedBox(height: 4),
-	                Text('\$${widget.precio.toStringAsFixed(2)}',
-	                    style: const TextStyle(color: Colors.black54)),
-	              ],
-	            ),
-	          ),
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.nombre,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text('\$${widget.precio.toStringAsFixed(2)}',
+                      style: const TextStyle(color: Colors.black54)),
+                ],
+              ),
+            ),
           ],
         ),
       ),
