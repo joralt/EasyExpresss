@@ -1,3 +1,5 @@
+// lib/login_page.dart   (antes LoginPage dentro de main.dart)
+
 import 'admin/admin_login.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -5,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'info.dart';
+import 'map_ubi.dart'; // <-- Importa tu página de mapa
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,9 +63,9 @@ class _LoginPageState extends State<LoginPage> {
 
       final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
       final user     = userCred.user!;
+      final userDoc  = FirebaseFirestore.instance.collection('usuarios').doc(user.uid);
 
-      // Guardamos en Firestore
-      final userDoc = FirebaseFirestore.instance.collection('usuarios').doc(user.uid);
+      // 1) Hacer merge de datos básicos
       await userDoc.set({
         'email'      : user.email,
         'displayName': user.displayName,
@@ -70,12 +73,25 @@ class _LoginPageState extends State<LoginPage> {
         'lastLogin'  : FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      // ¡Navega a InfoPage!
+      // 2) Comprobar si ya completó perfil
+      final snapshot = await userDoc.get();
+      final data     = snapshot.data();
+      final completed = data != null && data['profileCompleted'] == true;
+
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const InfoPage()),
-      );
+      if (completed) {
+        // Ya completó perfil → salto directo a MapInfoPage
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const MapInfoPage()),
+        );
+      } else {
+        // Nuevo o sin perfil completo → InfoPage
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const InfoPage()),
+        );
+      }
     } catch (e) {
       debugPrint('Error en Google Sign-In: $e');
     } finally {
@@ -83,12 +99,11 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  // Aquí el helper bien definido:
   Widget _buildButton(
     String text,
     IconData icon,
     Color backgroundColor, {
-    required VoidCallback onPressed, // parámetro nombrado
+    required VoidCallback onPressed,
   }) {
     return SizedBox(
       width: double.infinity,
@@ -103,8 +118,7 @@ class _LoginPageState extends State<LoginPage> {
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(30)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
           elevation: 5,
           shadowColor: Colors.black26,
         ),
@@ -120,7 +134,6 @@ class _LoginPageState extends State<LoginPage> {
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // Logo / header…
               SizedBox(
                 height: 273,
                 width: double.infinity,
@@ -190,17 +203,17 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   TextButton(
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
-    );
-  },
-  child: const Text("Entrar",
-    style: TextStyle(color: linkColor, fontSize: 16)
-  ),
-),
-
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+                      );
+                    },
+                    child: const Text(
+                      "Entrar como admin",
+                      style: TextStyle(color: linkColor, fontSize: 16),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 20),

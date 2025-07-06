@@ -1,7 +1,5 @@
-// lib/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'local_detail_screen.dart';
 import 'favorites_tab.dart';
 import 'orders_tab.dart';
