@@ -1,5 +1,8 @@
+// lib/cart_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../orders_tab.dart'; // ajusta la ruta según tu proyecto
 
 class CartScreen extends StatefulWidget {
@@ -21,6 +24,69 @@ class _CartScreenState extends State<CartScreen> {
         (sum, item) =>
             sum + (item['precio'] as double) * (item['qty'] as int),
       );
+
+Future<void> _onRealizarOrConfirmar() async {
+  // 1er tap: cambio el botón
+  if (!_confirmandoPedido) {
+    setState(() => _confirmandoPedido = true);
+    return;
+  }
+
+  // 2º tap: ya confirmamos, armamos el pedido
+  final envio = 1.25 +
+      (CartScreen.cartItems.length > 1
+          ? 0.50 * (CartScreen.cartItems.length - 1)
+          : 0.0);
+  final orderId = DateTime.now().millisecondsSinceEpoch.toString();
+
+  // ─── 1) Leemos los datos actuales del usuario ───
+  final user = FirebaseAuth.instance.currentUser!;
+  final userSnap = await FirebaseFirestore.instance
+      .collection('usuarios')
+      .doc(user.uid)
+      .get();
+  final u = userSnap.data()!;
+
+  // ─── 2) Preparamos el mapa completo ───
+  final orderData = {
+    'id'              : orderId,
+    'status'          : 'En preparación',
+    'date'            : FieldValue.serverTimestamp(),
+    'subtotal'        : subtotal,
+    'envio'           : envio,
+    'total'           : subtotal + envio,
+    // ◾ artículos
+    'items'           : CartScreen.cartItems.map((it) => {
+          'nombre'   : it['nombre'],
+          'imagenUrl': it['imagenUrl'],
+          'precio'   : it['precio'],
+          'qty'      : it['qty'],
+          'localName': it['localName'] ?? '',
+        }).toList(),
+    // ◾ datos del cliente
+    'customerName'    : u['displayName']  ?? '',
+    'customerEmail'   : u['email']        ?? '',
+    'customerPhone'   : u['phone']        ?? '',
+    'customerPhoto'   : u['photoURL']     ?? '',
+    'customerAddress' : u['address']      ?? '',
+    // ◾ locales de recogida (si los guardaste en perfil)
+    'locales'         : u['locales']      ?? [],
+  };
+
+  // ─── 3) Guardamos en Firestore ───
+  await FirebaseFirestore.instance
+      .collection('PEDIDOS')
+      .doc(orderId)
+      .set(orderData);
+
+  // ─── 4) Limpiamos carrito y mostramos confirmación ───
+  setState(() {
+    CartScreen.cartItems.clear();
+    _confirmandoPedido = false;
+    _pedidoEntregado   = true;
+  });
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -118,19 +184,15 @@ class _CartScreenState extends State<CartScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Subtotal
           Text('Subtotal: \$${subtotal.toStringAsFixed(2)}'),
           const SizedBox(height: 4),
-          // Envío
           Text('Envío: \$${envio.toStringAsFixed(2)}'),
           const Divider(height: 24, thickness: 1),
-          // Total
           Text(
             'Total: \$${(subtotal + envio).toStringAsFixed(2)}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
           const SizedBox(height: 12),
-          // Botón Realizar / Confirmar
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: _confirmandoPedido
@@ -185,58 +247,5 @@ class _CartScreenState extends State<CartScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _onRealizarOrConfirmar() async {
-    if (!_confirmandoPedido) {
-      // primer click: cambio el texto y color
-      setState(() => _confirmandoPedido = true);
-      return;
-    }
-
-    // segundo click → armo el pedido
-    final envio = 1.25 +
-        (CartScreen.cartItems.length > 1
-            ? 0.50 * (CartScreen.cartItems.length - 1)
-            : 0.0);
-    final orderId = DateTime.now().millisecondsSinceEpoch.toString();
-
-    // 1) datos para Firestore
-    final orderData = {
-      'id': orderId,
-      'status': 'En preparación',
-      'date': FieldValue.serverTimestamp(),
-      'subtotal': subtotal,
-      'envio': envio,
-      'total': subtotal + envio,
-      'items': CartScreen.cartItems
-          .map((it) => {
-                'nombre': it['nombre'],
-                'imagenUrl': it['imagenUrl'],
-                'precio': it['precio'],
-                'qty': it['qty'],
-              })
-          .toList(),
-    };
-
-    // 2) guardo en Firestore
-    await FirebaseFirestore.instance
-        .collection('PEDIDOS')
-        .doc(orderId)
-        .set(orderData);
-
-    // 3) guardo localmente con DateTime.now()
-    final localOrder = {
-      ...orderData,
-      'date': DateTime.now(),
-    };
-    PedidosScreen.pedidosActuales.insert(0, localOrder);
-
-    // 4) limpio y muestro confirmación
-    setState(() {
-      CartScreen.cartItems.clear();
-      _confirmandoPedido = false;
-      _pedidoEntregado   = true;
-    });
   }
 }

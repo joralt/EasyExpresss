@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map/flutter_map.dart' show NetworkTileProvider;
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';      // Para reverse-geocoding
@@ -27,7 +28,6 @@ class _MapInfoPageState extends State<MapInfoPage> {
   @override
   void initState() {
     super.initState();
-    // Mover cámara una vez construida la interfaz
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _mapController.move(_center, 15);
     });
@@ -35,8 +35,9 @@ class _MapInfoPageState extends State<MapInfoPage> {
 
   Future<void> _locateMe() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Activa tu GPS')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Activa tu GPS'))
+      );
       return;
     }
     var perm = await Geolocator.checkPermission();
@@ -47,7 +48,8 @@ class _MapInfoPageState extends State<MapInfoPage> {
     if (perm == LocationPermission.deniedForever) return;
 
     final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high);
+      desiredAccuracy: LocationAccuracy.high
+    );
     final me = LatLng(pos.latitude, pos.longitude);
     setState(() {
       _center = me;
@@ -63,8 +65,9 @@ class _MapInfoPageState extends State<MapInfoPage> {
     if (await canLaunchUrl(uriApp)) {
       await launchUrl(uriApp);
     } else {
-      final uriWeb =
-          Uri.parse('https://www.waze.com/ul?ll=$lat%2C$lng&navigate=yes');
+      final uriWeb = Uri.parse(
+        'https://www.waze.com/ul?ll=$lat%2C$lng&navigate=yes'
+      );
       await launchUrl(uriWeb, mode: LaunchMode.externalApplication);
     }
   }
@@ -77,9 +80,10 @@ class _MapInfoPageState extends State<MapInfoPage> {
       return;
     }
 
-    // 1) Reverse geocode para obtener calle, ciudad, provincia…
-    List<Placemark> placemarks =
-        await placemarkFromCoordinates(marker.latitude, marker.longitude);
+    // Reverse geocode
+    List<Placemark> placemarks = await placemarkFromCoordinates(
+      marker.latitude, marker.longitude
+    );
     final pm = placemarks.first;
     final addressString = [
       if (pm.street?.isNotEmpty == true) pm.street,
@@ -88,7 +92,7 @@ class _MapInfoPageState extends State<MapInfoPage> {
       if (pm.administrativeArea?.isNotEmpty == true) pm.administrativeArea,
     ].join(', ');
 
-    // 2) Guardar en Firestore
+    // Guardar en Firestore
     await FirebaseFirestore.instance
         .collection('usuarios')
         .doc(user.uid)
@@ -97,7 +101,7 @@ class _MapInfoPageState extends State<MapInfoPage> {
       'address': addressString,
     }, SetOptions(merge: true));
 
-    // 3) Navegar al HomeScreen pasando la info
+    // Navegar al HomeScreen
     final userData = {
       'Nombres': user.displayName ?? '',
       'Correo': user.email ?? '',
@@ -137,13 +141,21 @@ class _MapInfoPageState extends State<MapInfoPage> {
               options: MapOptions(
                 center: _center,
                 zoom: 15,
-                onTap: (_, latlng) => setState(() => _markerPos = latlng),
+                onTap: (_, latlng) => setState(() {
+                  _markerPos = latlng;
+                }),
               ),
               children: [
                 TileLayer(
                   urlTemplate:
                       'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                   subdomains: const ['a', 'b', 'c'],
+                  // <-- Aquí agregamos el User-Agent obligatorio
+                  tileProvider: NetworkTileProvider(
+                    headers: {
+                      'User-Agent': 'EasyExpress/1.0 (contacto@tudominio.com)'
+                    },
+                  ),
                 ),
                 if (_markerPos != null)
                   MarkerLayer(
@@ -182,7 +194,8 @@ class _MapInfoPageState extends State<MapInfoPage> {
                       label: const Text('Abrir en Waze'),
                       style: ElevatedButton.styleFrom(
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30)),
+                          borderRadius: BorderRadius.circular(30)
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: _openInWaze,
@@ -194,7 +207,8 @@ class _MapInfoPageState extends State<MapInfoPage> {
                       onPressed: _confirm,
                       style: OutlinedButton.styleFrom(
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30)),
+                          borderRadius: BorderRadius.circular(30)
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       child: const Text('Confirmar'),
