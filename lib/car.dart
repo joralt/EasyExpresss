@@ -25,68 +25,112 @@ class _CartScreenState extends State<CartScreen> {
             sum + (item['precio'] as double) * (item['qty'] as int),
       );
 
-Future<void> _onRealizarOrConfirmar() async {
-  // 1er tap: cambio el botón
-  if (!_confirmandoPedido) {
-    setState(() => _confirmandoPedido = true);
-    return;
+  Future<void> _onRealizarOrConfirmar() async {
+    // 1er tap: cambio de estado del botón
+    if (!_confirmandoPedido) {
+      setState(() => _confirmandoPedido = true);
+      return;
+    }
+
+    // 2º tap: confirmación → arma el pedido
+    final envio  = 1.25 +
+        (CartScreen.cartItems.length > 1
+            ? 0.50 * (CartScreen.cartItems.length - 1)
+            : 0.0);
+    final orderId = DateTime.now().millisecondsSinceEpoch.toString();
+
+    // ─── 1) Lee datos del cliente ───
+    final user     = FirebaseAuth.instance.currentUser!;
+    final userSnap = await FirebaseFirestore.instance
+        .collection('usuarios')
+        .doc(user.uid)
+        .get();
+    final udata    = userSnap.data() ?? {};
+
+    // ─── 2) Enriquecer cada plato con datos reales del local ───
+    final enrichedItems = await Future.wait(
+      CartScreen.cartItems.map((it) async {
+        final localId = it['localId'] as String?;
+        if (localId == null) {
+          // Si no tienes localId, devuelves un placeholder
+          return {
+            ...it,
+            'localName'    : 'Desconocido',
+            'localAddress' : '',
+            'localCoords'  : null,
+          };
+        }
+
+        // ¡LEER DEL DOC PADRE de LOCALES, no de la subcolección!
+        final locSnap = await FirebaseFirestore.instance
+            .collection('LOCALES')
+            .doc(localId)
+            .get();
+
+        if (!locSnap.exists || locSnap.data() == null) {
+          return {
+            ...it,
+            'localName'    : 'Desconocido',
+            'localAddress' : '',
+            'localCoords'  : null,
+          };
+        }
+
+        final loc = locSnap.data()!;
+
+        // Ajusta estos nombres al esquema real de tu Firestore:
+        final addressField = loc['Ubicación'] ?? loc['ubicacion'] ?? '';
+        final geoRaw       = loc['Coordenadas'] ?? loc['coordenadas'] ?? loc['location'];
+
+        GeoPoint? coords;
+        if (geoRaw is GeoPoint) {
+          coords = geoRaw;
+        } else if (geoRaw is Map<String, dynamic>) {
+          final lat = geoRaw['lat'], lng = geoRaw['lng'];
+          if (lat is num && lng is num) {
+            coords = GeoPoint(lat.toDouble(), lng.toDouble());
+          }
+        }
+
+        return {
+          ...it,
+          'localName'    : loc['Nombre']      ?? '',
+          'localAddress' : addressField as String,
+          'localCoords'  : coords,
+        };
+      }),
+    );
+
+    // ─── 3) Construir el mapa final del pedido ───
+    final orderData = {
+      'id'             : orderId,
+      'status'         : 'En preparación',
+      'date'           : FieldValue.serverTimestamp(),
+      'subtotal'       : subtotal,
+      'envio'          : envio,
+      'total'          : subtotal + envio,
+      'items'          : enrichedItems,
+      // Datos del cliente
+      'customerName'   : udata['displayName']    ?? '',
+      'customerEmail'  : udata['email']          ?? '',
+      'customerPhone'  : udata['phone']          ?? '',
+      'customerPhoto'  : udata['photoURL']       ?? '',
+      'customerAddress': udata['address']        ?? '',
+    };
+
+    // ─── 4) Guardar en Firestore ───
+    await FirebaseFirestore.instance
+        .collection('PEDIDOS')
+        .doc(orderId)
+        .set(orderData);
+
+    // ─── 5) Limpiar carrito y mostrar confirmación ───
+    setState(() {
+      CartScreen.cartItems.clear();
+      _confirmandoPedido = false;
+      _pedidoEntregado   = true;
+    });
   }
-
-  // 2º tap: ya confirmamos, armamos el pedido
-  final envio = 1.25 +
-      (CartScreen.cartItems.length > 1
-          ? 0.50 * (CartScreen.cartItems.length - 1)
-          : 0.0);
-  final orderId = DateTime.now().millisecondsSinceEpoch.toString();
-
-  // ─── 1) Leemos los datos actuales del usuario ───
-  final user = FirebaseAuth.instance.currentUser!;
-  final userSnap = await FirebaseFirestore.instance
-      .collection('usuarios')
-      .doc(user.uid)
-      .get();
-  final u = userSnap.data()!;
-
-  // ─── 2) Preparamos el mapa completo ───
-  final orderData = {
-    'id'              : orderId,
-    'status'          : 'En preparación',
-    'date'            : FieldValue.serverTimestamp(),
-    'subtotal'        : subtotal,
-    'envio'           : envio,
-    'total'           : subtotal + envio,
-    // ◾ artículos
-    'items'           : CartScreen.cartItems.map((it) => {
-          'nombre'   : it['nombre'],
-          'imagenUrl': it['imagenUrl'],
-          'precio'   : it['precio'],
-          'qty'      : it['qty'],
-          'localName': it['localName'] ?? '',
-        }).toList(),
-    // ◾ datos del cliente
-    'customerName'    : u['displayName']  ?? '',
-    'customerEmail'   : u['email']        ?? '',
-    'customerPhone'   : u['phone']        ?? '',
-    'customerPhoto'   : u['photoURL']     ?? '',
-    'customerAddress' : u['address']      ?? '',
-    // ◾ locales de recogida (si los guardaste en perfil)
-    'locales'         : u['locales']      ?? [],
-  };
-
-  // ─── 3) Guardamos en Firestore ───
-  await FirebaseFirestore.instance
-      .collection('PEDIDOS')
-      .doc(orderId)
-      .set(orderData);
-
-  // ─── 4) Limpiamos carrito y mostramos confirmación ───
-  setState(() {
-    CartScreen.cartItems.clear();
-    _confirmandoPedido = false;
-    _pedidoEntregado   = true;
-  });
-}
-
 
   @override
   Widget build(BuildContext context) {

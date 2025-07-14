@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'local_detail_screen.dart';
 import 'favorites_tab.dart';
 import 'orders_tab.dart';
@@ -27,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
           index: _currentIndex,
           children: [
             _buildHomeTab(),
-             FavoritosScreen(), // refresca al volver
+            FavoritosScreen(), 
             PedidosScreen(),
             const AccountTab(),
           ],
@@ -219,7 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
             separatorBuilder: (_, __) => const SizedBox(width: 16),
             itemCount: docs.length,
             itemBuilder: (_, i) {
-              final d = docs[i].data() as Map<String, dynamic>;
+              final d = docs[i].data()! as Map<String, dynamic>;
               return _LocaleCard(
                 localId:   docs[i].id,
                 nombre:    d['Nombre']    as String? ?? 'Sin nombre',
@@ -261,20 +262,27 @@ class _HomeScreenState extends State<HomeScreen> {
             separatorBuilder: (_, __) => const SizedBox(width: 16),
             itemCount: docs.length,
             itemBuilder: (_, i) {
-              final d = docs[i].data() as Map<String, dynamic>;
+              final docRef = docs[i].reference;
+              final data   = docs[i].data()! as Map<String, dynamic>;
+
+              // subimos 2 niveles para llegar al doc de LOCALES
+              final localDocRef = docRef.parent.parent;
+              final localId     = localDocRef?.id ?? '';
+
               return _PlatoCard(
-                nombre:    d['nombre'] as String? ?? 'Sin nombre',
-                precio:    (d['precio'] ?? 0).toDouble(),
-                imagenUrl: d['imagen'] as String? ?? '',
+                nombre:    data['nombre'] as String? ?? 'Sin nombre',
+                precio:    (data['precio'] ?? 0).toDouble(),
+                imagenUrl: data['imagen'] as String? ?? '',
+                localId:   localId,
                 onAdd: () {
-                  // **Sólo añade al carrito**:
                   CartScreen.cartItems.add({
-                    'nombre':    d['nombre'],
-                    'imagenUrl': d['imagen'],
-                    'precio':    (d['precio'] ?? 0).toDouble(),
+                    'nombre':    data['nombre'],
+                    'imagenUrl': data['imagen'],
+                    'precio':    (data['precio'] ?? 0).toDouble(),
                     'qty':       1,
+                    'localId':   localId,
                   });
-                  setState(() {}); // refresca icono del carrito si lo tienes
+                  setState(() {});
                 },
               );
             },
@@ -285,7 +293,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// ─────────────────────────────────────────────────────────
 /// Tarjeta de Local con ❤️
 class _LocaleCard extends StatefulWidget {
   final String localId, nombre, categoria, imagenUrl;
@@ -296,11 +303,14 @@ class _LocaleCard extends StatefulWidget {
     required this.categoria,
     required this.imagenUrl,
     required this.onTap,
-  });
-  @override __LocaleCardState createState() => __LocaleCardState();
+    Key? key,
+  }) : super(key: key);
+
+  @override
+  _LocaleCardState createState() => _LocaleCardState();
 }
 
-class __LocaleCardState extends State<_LocaleCard> {
+class _LocaleCardState extends State<_LocaleCard> {
   late bool isFavorito;
 
   @override
@@ -331,7 +341,8 @@ class __LocaleCardState extends State<_LocaleCard> {
     return GestureDetector(
       onTap: widget.onTap,
       child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         clipBehavior: Clip.hardEdge,
         child: SizedBox(
           width: 200,
@@ -350,7 +361,9 @@ class __LocaleCardState extends State<_LocaleCard> {
                     child: GestureDetector(
                       onTap: _toggleFavorito,
                       child: Icon(
-                        isFavorito ? Icons.favorite : Icons.favorite_border,
+                        isFavorito
+                            ? Icons.favorite
+                            : Icons.favorite_border,
                         color: isFavorito ? Colors.red : Colors.white,
                       ),
                     ),
@@ -363,11 +376,12 @@ class __LocaleCardState extends State<_LocaleCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(widget.nombre,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                        style:
+                            const TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
                     Text(widget.categoria,
-                        style:
-                            const TextStyle(color: Colors.black54, fontSize: 12)),
+                        style: const TextStyle(
+                            color: Colors.black54, fontSize: 12)),
                   ],
                 ),
               ),
@@ -379,105 +393,73 @@ class __LocaleCardState extends State<_LocaleCard> {
   }
 }
 
-/// ─────────────────────────────────────────────────────────
 /// Tarjeta de Plato con ❤️ + ➕
-class _PlatoCard extends StatefulWidget {
-  final String nombre, imagenUrl;
+class _PlatoCard extends StatelessWidget {
+  final String nombre, imagenUrl, localId;
   final double precio;
   final VoidCallback onAdd;
+
   const _PlatoCard({
     required this.nombre,
     required this.precio,
     required this.imagenUrl,
+    required this.localId,
     required this.onAdd,
-  });
-  @override __PlatoCardState createState() => __PlatoCardState();
-}
-
-class __PlatoCardState extends State<_PlatoCard> {
-  late bool isFavorito;
-
-  @override
-  void initState() {
-    super.initState();
-    isFavorito = FavoritosScreen.productosFavoritos.any(
-      (p) => p['nombre'] == widget.nombre,
-    );
-  }
-
-  void _toggleFavorito() {
-    setState(() => isFavorito = !isFavorito);
-    if (isFavorito) {
-      FavoritosScreen.productosFavoritos.add({
-        'nombre': widget.nombre,
-        'imagenUrl': widget.imagenUrl,
-        'precio': widget.precio.toStringAsFixed(2),
-      });
-    } else {
-      FavoritosScreen.productosFavoritos
-          .removeWhere((p) => p['nombre'] == widget.nombre);
-    }
-  }
+    Key? key,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       clipBehavior: Clip.hardEdge,
       child: SizedBox(
         width: 200,
-        child: Column(
-          children: [
-            Expanded(
-              child: Stack(children: [
-                Positioned.fill(
-                  child: widget.imagenUrl.isNotEmpty
-                      ? Image.network(widget.imagenUrl, fit: BoxFit.cover)
-                      : Container(color: Colors.grey.shade300),
+        child: Stack(children: [
+          Positioned.fill(
+            child: imagenUrl.isNotEmpty
+                ? Image.network(imagenUrl, fit: BoxFit.cover)
+                : Container(color: Colors.grey.shade300),
+          ),
+          // ➕ AÑADIR AL CARRITO
+          Positioned(
+            top: 8,
+            right: 8,
+            child: GestureDetector(
+              onTap: onAdd,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white70,
+                  shape: BoxShape.circle,
                 ),
-                // ❤️ FAVORITO
-                Positioned(
-                  top: 8, left: 8,
-                  child: GestureDetector(
-                    onTap: _toggleFavorito,
-                    child: Icon(
-                      isFavorito ? Icons.favorite : Icons.favorite_border,
-                      color: isFavorito ? Colors.red : Colors.white,
-                    ),
-                  ),
-                ),
-                // ➕ AÑADIR AL CARRITO
-                Positioned(
-                  top: 8, right: 8,
-                  child: GestureDetector(
-                    onTap: widget.onAdd,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white70,
-                        shape: BoxShape.circle,
-                      ),
-                      padding: const EdgeInsets.all(4),
-                      child: const Icon(Icons.add, size: 20),
-                    ),
-                  ),
-                ),
-              ]),
+                padding: const EdgeInsets.all(4),
+                child: const Icon(Icons.add, size: 20),
+              ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(8),
+          ),
+          // (Aquí podrías agregar ❤️ si quieres)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            child: Container(
+              color: Colors.black54,
+              padding: const EdgeInsets.all(4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(widget.nombre,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('\$${widget.precio.toStringAsFixed(2)}',
-                      style: const TextStyle(color: Colors.black54)),
+                  Text(nombre,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold)),
+                  Text('\$${precio.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 12)),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ]),
       ),
     );
   }
