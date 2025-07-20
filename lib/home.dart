@@ -1,3 +1,5 @@
+// lib/home_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'local_detail_screen.dart';
@@ -27,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
           index: _currentIndex,
           children: [
             _buildHomeTab(),
-             FavoritosScreen(), // refresca al volver
+            FavoritosScreen(),
             PedidosScreen(),
             const AccountTab(),
           ],
@@ -40,10 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
         unselectedItemColor: Colors.grey,
         onTap: (i) => setState(() => _currentIndex = i),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home),      label: 'Inicio'),
-          BottomNavigationBarItem(icon: Icon(Icons.favorite),  label: 'Favoritos'),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Inicio'),
+          BottomNavigationBarItem(icon: Icon(Icons.favorite), label: 'Favoritos'),
           BottomNavigationBarItem(icon: Icon(Icons.shopping_bag), label: 'Pedidos'),
-          BottomNavigationBarItem(icon: Icon(Icons.person),    label: 'Cuenta'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Cuenta'),
         ],
       ),
     );
@@ -63,15 +65,13 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(children: [
               CircleAvatar(
                 radius: 24,
-                backgroundImage:
-                    photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
                 backgroundColor: Colors.grey[300],
               ),
               const SizedBox(width: 12),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Hola, $name',
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold)),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
                 Text(address, style: const TextStyle(color: Colors.black54)),
               ]),
@@ -142,8 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: Center(
                 child: Text('Promo ${i + 1}',
-                    style: const TextStyle(
-                        fontSize: 18, fontWeight: FontWeight.bold))),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
           ),
         ),
       );
@@ -242,6 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// ——— Aquí está la parte corregida: PLATOS con localId padre ———
   Widget _buildPlatosRecomendados() {
     return SizedBox(
       height: 180,
@@ -261,20 +261,25 @@ class _HomeScreenState extends State<HomeScreen> {
             separatorBuilder: (_, __) => const SizedBox(width: 16),
             itemCount: docs.length,
             itemBuilder: (_, i) {
-              final d = docs[i].data() as Map<String, dynamic>;
+              final docSnap = docs[i];
+              final d = docSnap.data() as Map<String, dynamic>;
+
+              // extraigo el ID del local (el padre de la subcolección PLATOS)
+              final parentLocalId = docSnap.reference.parent.parent!.id;
+
               return _PlatoCard(
                 nombre:    d['nombre'] as String? ?? 'Sin nombre',
                 precio:    (d['precio'] ?? 0).toDouble(),
                 imagenUrl: d['imagen'] as String? ?? '',
                 onAdd: () {
-                  // **Sólo añade al carrito**:
                   CartScreen.cartItems.add({
                     'nombre':    d['nombre'],
                     'imagenUrl': d['imagen'],
                     'precio':    (d['precio'] ?? 0).toDouble(),
                     'qty':       1,
+                    'localId':   parentLocalId,  // aquí va el ID correcto
                   });
-                  setState(() {}); // refresca icono del carrito si lo tienes
+                  setState(() {});
                 },
               );
             },
@@ -297,7 +302,8 @@ class _LocaleCard extends StatefulWidget {
     required this.imagenUrl,
     required this.onTap,
   });
-  @override __LocaleCardState createState() => __LocaleCardState();
+  @override
+  __LocaleCardState createState() => __LocaleCardState();
 }
 
 class __LocaleCardState extends State<_LocaleCard> {
@@ -391,7 +397,8 @@ class _PlatoCard extends StatefulWidget {
     required this.imagenUrl,
     required this.onAdd,
   });
-  @override __PlatoCardState createState() => __PlatoCardState();
+  @override
+  __PlatoCardState createState() => __PlatoCardState();
 }
 
 class __PlatoCardState extends State<_PlatoCard> {

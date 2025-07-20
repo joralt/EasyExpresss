@@ -1,10 +1,11 @@
-// lib/delivery/delivery.dart
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map/plugin_api.dart'; // NetworkTileProvider, PolylineLayer
 import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 
 class RepartidorApp extends StatefulWidget {
   final Map<String, dynamic> repartidorData;
@@ -20,20 +21,18 @@ class _RepartidorAppState extends State<RepartidorApp> {
   bool _jornadaActiva = false;
   String? _selectedOrderId;
   Map<String, dynamic>? _selectedOrderData;
-
   final _pedidosRef = FirebaseFirestore.instance.collection('PEDIDOS');
 
-  // Coordenadas iniciales de La Maná, Cotopaxi
   LatLng _center = LatLng(-0.9337, -79.2044);
   LatLng? _markerPos;
   final _mapController = MapController();
+  List<LatLng> _routePoints = [];
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mapController.move(_center, 15);
-    });
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _mapController.move(_center, 15));
   }
 
   Future<void> _locateMe() async {
@@ -59,41 +58,80 @@ class _RepartidorAppState extends State<RepartidorApp> {
     });
   }
 
+  Future<List<LatLng>> _fetchRoadRoute(LatLng start, LatLng end) async {
+    final coords =
+        '${start.longitude},${start.latitude};${end.longitude},${end.latitude}';
+    final url = Uri.parse(
+      'https://router.project-osrm.org/route/v1/driving/$coords'
+      '?overview=full&geometries=geojson',
+    );
+    final res = await http.get(url);
+    if (res.statusCode != 200) {
+      throw Exception('OSRM error ${res.statusCode}');
+    }
+    final data = json.decode(res.body);
+    final raw = data['routes'][0]['geometry']['coordinates'] as List<dynamic>;
+    return raw
+        .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+        .toList();
+  }
+
   Widget _buildHomeTab() {
     return Stack(
       children: [
-        // El mapa
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            center: _center,
-            zoom: 15,
-            onTap: (_, latlng) => setState(() => _markerPos = latlng),
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              subdomains: const ['a', 'b', 'c'],
-            ),
-            if (_markerPos != null)
-              MarkerLayer(
-                markers: [
+        Positioned.fill(
+          child: FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(center: _center, zoom: 15),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
+                tileProvider: NetworkTileProvider(headers: {
+                  'User-Agent': 'easyexpress/1.0',
+                  'Referer': 'https://tudominio.com/',
+                }),
+              ),
+              if (_routePoints.length >= 2)
+                PolylineLayer(polylines: [
+                  Polyline(points: _routePoints, strokeWidth: 4),
+                ]),
+              MarkerLayer(markers: [
+                if (_markerPos != null)
                   Marker(
                     point: _markerPos!,
                     width: 40,
                     height: 40,
                     builder: (_) => const Icon(
-                      Icons.location_on,
+                      Icons.person_pin_circle,
                       size: 40,
-                      color: Colors.red,
+                      color: Colors.blue,
                     ),
-                  )
-                ],
-              ),
-          ],
+                  ),
+                for (var loc in rawLocales(_selectedOrderData))
+                  Marker(
+                    point: loc,
+                    width: 30,
+                    height: 30,
+                    builder: (_) =>
+                        const Icon(Icons.store, size: 30, color: Colors.green),
+                  ),
+                if (_selectedOrderData?['0'] != null &&
+                    _selectedOrderData?['1'] != null)
+                  Marker(
+                    point: LatLng(
+                      (_selectedOrderData!['0'] as num).toDouble(),
+                      (_selectedOrderData!['1'] as num).toDouble(),
+                    ),
+                    width: 35,
+                    height: 35,
+                    builder: (_) =>
+                        const Icon(Icons.home, size: 35, color: Colors.red),
+                  ),
+              ]),
+            ],
+          ),
         ),
-
-        // Botón de localizar
         Positioned(
           top: 16,
           right: 16,
@@ -103,10 +141,8 @@ class _RepartidorAppState extends State<RepartidorApp> {
             child: const Icon(Icons.my_location),
           ),
         ),
-
-        // Botón de iniciar / terminar jornada
         Positioned(
-          bottom: 16,
+          bottom: 80,
           left: 16,
           right: 16,
           child: ElevatedButton.icon(
@@ -119,13 +155,9 @@ class _RepartidorAppState extends State<RepartidorApp> {
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: () {
-              setState(() => _jornadaActiva = !_jornadaActiva);
-            },
+            onPressed: () => setState(() => _jornadaActiva = !_jornadaActiva),
           ),
         ),
-
-        // Si la jornada está activa, mostramos los pedidos pendientes
         if (_jornadaActiva)
           Positioned(
             top: 80,
@@ -140,26 +172,7 @@ class _RepartidorAppState extends State<RepartidorApp> {
                   return const Center(child: CircularProgressIndicator());
                 }
                 final docs = snap.data?.docs ?? [];
-
-                // Si no quedan pendientes...
                 if (docs.isEmpty) {
-                  // ...pero ya aceptó uno, mostramos mensaje con su nombre
-                  if (_selectedOrderData != null) {
-                    final cliente = _selectedOrderData!['customerName']
-                        as String? ?? 'Cliente';
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      color: Colors.yellow[100],
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Tienes un pedido pendiente de $cliente',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    );
-                  }
-                  // ...sino, mensaje genérico
                   return const Card(
                     margin: EdgeInsets.only(bottom: 8),
                     child: Padding(
@@ -168,8 +181,6 @@ class _RepartidorAppState extends State<RepartidorApp> {
                     ),
                   );
                 }
-
-                // Sino, listado de pendientes
                 return Column(
                   children: docs.map((doc) {
                     final data = doc.data()! as Map<String, dynamic>;
@@ -185,32 +196,47 @@ class _RepartidorAppState extends State<RepartidorApp> {
                         subtitle: Text(
                             'Estado: ${inProg ? 'En curso' : data['status']}'),
                         trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                inProg ? Colors.grey : Colors.green,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                          ),
                           onPressed: inProg
                               ? null
                               : () async {
-                                  // 1) Actualizar en Firestore
+                                  // marco pedido en curso
                                   await _pedidosRef
                                       .doc(pedidoId)
                                       .update({'status': 'En curso'});
-                                  // 2) Reflejar localmente y cambiar pestaña
                                   setState(() {
                                     _selectedOrderId = pedidoId;
                                     _selectedOrderData = {
                                       'id': pedidoId,
                                       ...data
                                     };
-                                    _currentIndex = 1;
                                   });
+                                  // obtengo lat/lng de cliente
+                                  final lat = data['0'] as num?;
+                                  final lng = data['1'] as num?;
+                                  if (lat == null || lng == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'Coordenadas cliente faltantes'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  final destino = LatLng(
+                                      lat.toDouble(), lng.toDouble());
+                                  // calculo ruta carretera
+                                  final origen = _markerPos ?? _center;
+                                  final road = await _fetchRoadRoute(
+                                      origen, destino);
+                                  setState(() => _routePoints = road);
                                 },
-                          child:
-                              Text(inProg ? 'Pedido en curso' : 'Aceptar'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                inProg ? Colors.grey : Colors.green,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20)),
+                          ),
+                          child: Text(inProg ? 'En curso' : 'Aceptar'),
                         ),
                       ),
                     );
@@ -244,10 +270,7 @@ class _RepartidorAppState extends State<RepartidorApp> {
       ),
       body: IndexedStack(
         index: _currentIndex,
-        children: [
-          _buildHomeTab(),
-          _buildPedidosTab(),
-        ],
+        children: [_buildHomeTab(), _buildPedidosTab()],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
@@ -261,7 +284,14 @@ class _RepartidorAppState extends State<RepartidorApp> {
   }
 }
 
-/// Pantalla de detalle de pedido
+List<LatLng> rawLocales(Map<String, dynamic>? orderData) {
+  final raw = orderData?['locales'] as List<dynamic>? ?? [];
+  return raw.cast<Map<String, dynamic>>().map((loc) {
+    final lc = loc['localCoords'] as List<dynamic>;
+    return LatLng((lc[0] as num).toDouble(), (lc[1] as num).toDouble());
+  }).toList();
+}
+
 class PedidoDetalleScreen extends StatelessWidget {
   final String pedidoId;
   final Map<String, dynamic> pedidoData;
@@ -283,9 +313,7 @@ class PedidoDetalleScreen extends StatelessWidget {
     final envio = data['envio'] as num? ?? 0;
     final total = data['total'] as num? ?? 0;
     final items = (data['items'] as List).cast<Map<String, dynamic>>();
-    final locales = (data['locales'] as List?)
-            ?.cast<Map<String, dynamic>>() ??
-        [];
+    final locales = (data['locales'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -325,8 +353,7 @@ class PedidoDetalleScreen extends StatelessWidget {
               leading: Image.network(it['imagenUrl'],
                   width: 48, height: 48, fit: BoxFit.cover),
               title: Text(it['nombre']),
-              subtitle: Text(
-                  'Precio: \$${it['precio']} x ${it['qty']}  📍 Local: ${it['localName'] ?? ''}'),
+              subtitle: Text('Precio: \$${it['precio']} x ${it['qty']}'),
             )),
       ],
     );
