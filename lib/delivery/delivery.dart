@@ -84,6 +84,25 @@ class _RepartidorAppState extends State<RepartidorApp> {
         .toList();
   }
 
+  /// Ruta con paradas intermedias
+Future<List<LatLng>> _fetchMultiStopRoute(List<LatLng> points) async {
+  final coords = points.map((p) => '${p.longitude},${p.latitude}').join(';');
+  final url = Uri.parse(
+    'https://router.project-osrm.org/route/v1/driving/$coords'
+    '?overview=full&geometries=geojson&overview=full'
+  );
+  final res = await http.get(url);
+  if (res.statusCode != 200) {
+    throw Exception('OSRM error ${res.statusCode}');
+  }
+  final data = json.decode(res.body);
+  final raw = data['routes'][0]['geometry']['coordinates'] as List;
+  return raw
+      .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+      .toList();
+}
+
+
   /// Extrae las coordenadas de todos los locales de orderData['items']
   List<LatLng> _extractLocalPoints(Map<String, dynamic>? orderData) {
     final items = (orderData?['items'] as List<dynamic>?) ?? [];
@@ -265,28 +284,29 @@ class _RepartidorAppState extends State<RepartidorApp> {
                                       ...data
                                     };
                                   });
-                                  final custPt =
-                                      _extractCustomerPoint(
-                                          _selectedOrderData);
-                                  final origin =
-                                      _markerPos ?? _center;
-                                  if (custPt != null) {
-                                    final road =
-                                        await _fetchRoadRoute(
-                                            origin, custPt);
-                                    setState(() =>
-                                        _routePoints = road);
-                                    // 3) cambio a pestaña detalles
-                                    _currentIndex = 1;
-                                  } else {
-                                    ScaffoldMessenger.of(
-                                            context)
-                                        .showSnackBar(
-                                      const SnackBar(
-                                          content: Text(
-                                              'Coordenadas de cliente faltantes')),
-                                    );
-                                  }
+                                  // 2) preparo origin, locales y cliente
+final origin   = _markerPos ?? _center;
+final locals   = _extractLocalPoints(_selectedOrderData);
+final customer = _extractCustomerPoint(_selectedOrderData);
+
+// 3) valido que tenga coords de cliente
+if (customer == null) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Coordenadas de cliente faltantes')),
+  );
+  return;
+}
+
+// 4) trazo ruta multi‑stop: repartidor → locales… → cliente
+final ruta = await _fetchMultiStopRoute(
+  [origin, ...locals, customer],
+);
+setState(() => _routePoints = ruta);
+
+// 5) cambio a pestaña detalles
+setState(() => _currentIndex = 1);
+
+                                  
                                 },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: inProg
