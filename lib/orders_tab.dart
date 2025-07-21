@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'local_detail_screen.dart';
 import 'car.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Asegúrate de importar FirebaseAuth
 
 class PedidosScreen extends StatefulWidget {
   const PedidosScreen({Key? key}) : super(key: key);
@@ -31,83 +32,123 @@ class _PedidosScreenState extends State<PedidosScreen>
     setState(() {});
   }
 
-  Widget _buildPedidoCard(
-      Map<String, dynamic> pedido, bool isActual, int index) {
-    final status = pedido['status'] as String;
-    final id     = pedido['id']     as String;
-
-    // leo el campo date de forma segura:
-    final rawDate = pedido['date'];
-    final date = rawDate is Timestamp
-        ? rawDate.toDate()
-        : (rawDate is DateTime ? rawDate : DateTime.now());
-
-    final items = pedido['items'] as List<dynamic>;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Estado, ID y Fecha
-              Text(
-                'Estado: $status',
-                style: TextStyle(
-                  color: status == 'En preparación'
-                      ? Colors.green
-                      : Colors.redAccent,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text('Pedido ID: $id',
-                  style: const TextStyle(color: Colors.black54)),
-              const SizedBox(height: 2),
-              Text(
-                'Fecha: ${date.toLocal().toString().split('.').first}',
-                style: const TextStyle(color: Colors.black54),
-              ),
-              const SizedBox(height: 8),
-
-              // Botón Cancelar Pedido (solo en actuales)
-              if (isActual)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20)),
-                    ),
-                    onPressed: () => _cancelarPedido(index),
-                    child: const Text('Cancelar Pedido'),
-                  ),
-                ),
-              if (isActual) const SizedBox(height: 8),
-
-              const Divider(),
-
-              // Lista de platos
-              ...items.map<Widget>((it) {
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: it['imagenUrl'] != ''
-                      ? Image.network(it['imagenUrl'],
-                          width: 48, height: 48, fit: BoxFit.cover)
-                      : const SizedBox(width: 48, height: 48),
-                  title: Text(it['nombre']),
-                  subtitle: Text(
-                    '\$${(it['precio'] as double).toStringAsFixed(2)} x ${it['qty']}',
-                  ),
-                );
-              }).toList(),
-            ]),
-      ),
-    );
+  // Método para aceptar el pedido
+  void _aceptarPedido(int index) async {
+    final pedido = PedidosScreen.pedidosActuales[index];
+    
+    // Cambiar el estado del pedido a "En camino"
+    pedido['status'] = 'En camino';
+    
+    // Añadir el nombre del repartidor al pedido
+    pedido['repartidor'] = FirebaseAuth.instance.currentUser?.displayName ?? 'Repartidor';
+    
+    // Actualizar el pedido en Firestore
+    await FirebaseFirestore.instance
+        .collection('PEDIDOS')
+        .doc(pedido['id'])
+        .update({
+          'status': 'En camino',
+          'repartidor': pedido['repartidor'],
+        });
+    
+    // Actualizar la lista de pedidos actuales
+    setState(() {
+      PedidosScreen.pedidosActuales[index] = pedido;
+    });
   }
+
+  Widget _buildPedidoCard(Map<String, dynamic> pedido, bool isActual, int index) {
+  final status = pedido['status'] as String;
+  final id = pedido['id'] as String;
+
+  final rawDate = pedido['date'];
+  final date = rawDate is Timestamp
+      ? rawDate.toDate()
+      : (rawDate is DateTime ? rawDate : DateTime.now());
+
+  final items = pedido['items'] as List<dynamic>;
+  final repartidor = pedido['repartidor'] ?? '—'; // Mostrar el nombre del repartidor
+  final subtotal = pedido['subtotal'] as double? ?? 0.0;
+  final envio = pedido['envio'] as double? ?? 0.0;
+  final total = subtotal + envio;
+
+  return Card(
+    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    child: Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Estado, ID y Fecha
+          Text(
+            'Estado: $status',
+            style: TextStyle(
+              color: status == 'En preparación'
+                  ? Colors.green
+                  : Colors.redAccent,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text('Pedido ID: $id',
+              style: const TextStyle(color: Colors.black54)),
+          const SizedBox(height: 2),
+          Text(
+            'Fecha: ${date.toLocal().toString().split('.').first}',
+            style: const TextStyle(color: Colors.black54),
+          ),
+          const SizedBox(height: 8),
+          // Mostrar el nombre del repartidor
+          Text('Repartidor: $repartidor',
+              style: const TextStyle(color: Colors.black54)),
+          const SizedBox(height: 8),
+
+          // Botón Cancelar Pedido (solo en actuales)
+          if (isActual)
+            Align(
+              alignment: Alignment.centerRight,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                ),
+                onPressed: () => _cancelarPedido(index),
+                child: const Text('Cancelar Pedido'),
+              ),
+            ),
+          if (isActual) const SizedBox(height: 8),
+
+          const Divider(),
+
+          // Lista de platos
+          ...items.map<Widget>((it) {
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: it['imagenUrl'] != ''
+                  ? Image.network(it['imagenUrl'],
+                      width: 48, height: 48, fit: BoxFit.cover)
+                  : const SizedBox(width: 48, height: 48),
+              title: Text(it['nombre']),
+              subtitle: Text(
+                '\$${(it['precio'] as double).toStringAsFixed(2)} x ${it['qty']}',
+              ),
+            );
+          }).toList(),
+
+          // Mostrar subtotal, envío y total
+          const Divider(),
+          Text('Subtotal: \$${subtotal.toStringAsFixed(2)}'),
+          Text('Envío: \$${envio.toStringAsFixed(2)}'),
+          Text('Total: \$${total.toStringAsFixed(2)}',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
+    ),
+  );
+}
+
 
   Widget _buildTab(List<Map<String, dynamic>> list, bool isActual) {
     if (list.isEmpty) {

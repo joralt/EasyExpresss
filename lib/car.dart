@@ -1,5 +1,3 @@
-// lib/cart_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -38,25 +36,23 @@ class _CartScreenState extends State<CartScreen> {
     final orderId = DateTime.now().millisecondsSinceEpoch.toString();
 
     // 2) datos cliente
-// ─── 2) datos cliente ───
-final user    = FirebaseAuth.instance.currentUser!;
-final uSnap   = await FirebaseFirestore.instance
-    .collection('usuarios')
-    .doc(user.uid)
-    .get();
-final udata   = uSnap.data()!;
-// Extraemos coordenadas de usuario, si existen:
-GeoPoint? customerCoords;
-final rawCustLoc = udata['location'] ?? udata['coords'];
-if (rawCustLoc is GeoPoint) {
-  customerCoords = rawCustLoc;
-} else if (rawCustLoc is Map) {
-  final lat = rawCustLoc['lat'], lng = rawCustLoc['lng'];
-  if (lat is num && lng is num) {
-    customerCoords = GeoPoint(lat.toDouble(), lng.toDouble());
-  }
-}
-
+    final user    = FirebaseAuth.instance.currentUser!;
+    final uSnap   = await FirebaseFirestore.instance
+        .collection('usuarios')
+        .doc(user.uid)
+        .get();
+    final udata   = uSnap.data()!;
+    // Extraemos coordenadas de usuario, si existen:
+    GeoPoint? customerCoords;
+    final rawCustLoc = udata['location'] ?? udata['coords'];
+    if (rawCustLoc is GeoPoint) {
+      customerCoords = rawCustLoc;
+    } else if (rawCustLoc is Map) {
+      final lat = rawCustLoc['lat'], lng = rawCustLoc['lng'];
+      if (lat is num && lng is num) {
+        customerCoords = GeoPoint(lat.toDouble(), lng.toDouble());
+      }
+    }
 
     // 3) enriquecer cada plato con datos del local
     final enrichedItems = await Future.wait(
@@ -83,7 +79,6 @@ if (rawCustLoc is GeoPoint) {
           };
         }
         final loc = locSnap.data()!;
-        // ¡OJITO! matching exacto de campos en tu Firestore:
         final nameField    = loc['Nombre']      as String? ?? '';
         final addressField = loc['Ubicación']   as String? ?? '';
         final rawCoords    = loc['Coordenadas'];
@@ -107,36 +102,42 @@ if (rawCustLoc is GeoPoint) {
     );
 
     // 4) armar pedido
-final orderData = {
-  'id'              : orderId,
-  'status'          : 'En preparación',
-  'date'            : FieldValue.serverTimestamp(),
-  'subtotal'        : subtotal,
-  'envio'           : envio,
-  'total'           : subtotal + envio,
-  'items'           : enrichedItems,
-  // datos del cliente
-  'customerName'    : udata['displayName']  as String? ?? '',
-  'customerEmail'   : udata['email']        as String? ?? '',
-  'customerPhone'   : udata['phone']        as String? ?? '',
-  'customerPhoto'   : udata['photoURL']     as String? ?? '',
-  'customerAddress' : udata['address']      as String? ?? '',
-  'customerCoords'  : customerCoords,        // ← aquí
-};
+    final orderData = {
+      'id'              : orderId,
+      'status'          : 'En preparación',
+      'date'            : FieldValue.serverTimestamp(),
+      'subtotal'        : subtotal,
+      'envio'           : envio,
+      'total'           : subtotal + envio,
+      'items'           : enrichedItems,
+      'customerName'    : udata['displayName']  as String? ?? '',
+      'customerEmail'   : udata['email']        as String? ?? '',
+      'customerPhone'   : udata['phone']        as String? ?? '',
+      'customerPhoto'   : udata['photoURL']     as String? ?? '',
+      'customerAddress' : udata['address']      as String? ?? '',
+      'customerCoords'  : customerCoords,        // ← aquí
+    };
 
-
-    // 5) guardar
+    // 5) guardar en Firestore
     await FirebaseFirestore.instance
         .collection('PEDIDOS')
         .doc(orderId)
         .set(orderData);
 
-    // 6) limpio y confirmo
+    // 6) agregar a la lista de pedidos actuales en PedidosScreen
+    PedidosScreen.pedidosActuales.add(orderData); // Agregar a la lista
+
+    // 7) limpio y confirmo
     setState(() {
       CartScreen.cartItems.clear();
       _confirmandoPedido = false;
       _pedidoEntregado   = true;
     });
+
+    // Navegar a la pantalla de Pedidos
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const PedidosScreen()), // Navegar a la pantalla de pedidos
+    );
   }
 
   @override

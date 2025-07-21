@@ -124,7 +124,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-
               // Formulario
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -160,7 +159,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         onSaved: (v) => _userId = v!.trim(),
                       ),
                       const SizedBox(height: 16),
-
                       // Contraseña
                       TextFormField(
                         decoration: InputDecoration(
@@ -183,12 +181,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         onSaved: (v) => _password = v!,
                       ),
                       const SizedBox(height: 16),
-
                       if (_errorMsg != null)
                         Text(_errorMsg!,
                             style: const TextStyle(color: Colors.red)),
                       const SizedBox(height: 16),
-
                       SizedBox(
                         width: double.infinity,
                         height: 56,

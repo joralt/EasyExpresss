@@ -1,5 +1,3 @@
-// lib/delivery/delivery.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -8,6 +6,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import '../orders_tab.dart';
 
 class RepartidorApp extends StatefulWidget {
   final Map<String, dynamic> repartidorData;
@@ -85,23 +85,22 @@ class _RepartidorAppState extends State<RepartidorApp> {
   }
 
   /// Ruta con paradas intermedias
-Future<List<LatLng>> _fetchMultiStopRoute(List<LatLng> points) async {
-  final coords = points.map((p) => '${p.longitude},${p.latitude}').join(';');
-  final url = Uri.parse(
-    'https://router.project-osrm.org/route/v1/driving/$coords'
-    '?overview=full&geometries=geojson&overview=full'
-  );
-  final res = await http.get(url);
-  if (res.statusCode != 200) {
-    throw Exception('OSRM error ${res.statusCode}');
+  Future<List<LatLng>> _fetchMultiStopRoute(List<LatLng> points) async {
+    final coords = points.map((p) => '${p.longitude},${p.latitude}').join(';');
+    final url = Uri.parse(
+      'https://router.project-osrm.org/route/v1/driving/$coords'
+      '?overview=full&geometries=geojson&overview=full'
+    );
+    final res = await http.get(url);
+    if (res.statusCode != 200) {
+      throw Exception('OSRM error ${res.statusCode}');
+    }
+    final data = json.decode(res.body);
+    final raw = data['routes'][0]['geometry']['coordinates'] as List;
+    return raw
+        .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+        .toList();
   }
-  final data = json.decode(res.body);
-  final raw = data['routes'][0]['geometry']['coordinates'] as List;
-  return raw
-      .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
-      .toList();
-}
-
 
   /// Extrae las coordenadas de todos los locales de orderData['items']
   List<LatLng> _extractLocalPoints(Map<String, dynamic>? orderData) {
@@ -132,6 +131,49 @@ Future<List<LatLng>> _fetchMultiStopRoute(List<LatLng> points) async {
     return null;
   }
 
+void _aceptarPedido(int index) async {
+  final pedido = PedidosScreen.pedidosActuales[index];
+
+  // Cambiar el estado del pedido a "En camino"
+  pedido['status'] = 'En camino';
+
+  // Obtener el nombre del repartidor desde la colección 'usuarios'
+  final userId = FirebaseAuth.instance.currentUser?.uid;
+
+  if (userId != null) {
+    // Obtener el nombre del repartidor desde Firestore
+    final repartidorDoc = await FirebaseFirestore.instance
+        .collection('usuarios')
+        .doc(userId)
+        .get();
+
+    if (repartidorDoc.exists) {
+      final repartidorName = repartidorDoc.data()?['displayName'] ?? 'Repartidor';
+      
+      // Asignar el nombre del repartidor al pedido
+      pedido['repartidor'] = repartidorName;
+
+      // Actualizar el pedido en Firestore
+      await FirebaseFirestore.instance
+          .collection('PEDIDOS')
+          .doc(pedido['id'])
+          .update({
+            'status': 'En camino',
+            'repartidor': repartidorName,
+          });
+
+      // Actualizar la lista de pedidos actuales
+      setState(() {
+        PedidosScreen.pedidosActuales[index] = pedido;
+      });
+    } else {
+      print('El repartidor no existe en la base de datos');
+    }
+  }
+}
+
+
+
   Widget _buildHomeTab() {
     final locals = _extractLocalPoints(_selectedOrderData);
     final customerPt = _extractCustomerPoint(_selectedOrderData);
@@ -141,54 +183,52 @@ Future<List<LatLng>> _fetchMultiStopRoute(List<LatLng> points) async {
         // ─── MAPA PRINCIPAL ─────────────────────────────────────────
         Positioned.fill(
           child: FlutterMap(
-  mapController: _mapController,
-  options: MapOptions(center: _center, zoom: 15),
-  children: [
-    // 1) Tile layer base con headers para evitar 403
-    TileLayer(
-      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      subdomains: const ['a','b','c'],
-      tileProvider: NetworkTileProvider(headers: {
-        'User-Agent': 'easyexpress/1.0',
-        'Referer': 'https://your.domain.com/',
-      }),
-    ),
+            mapController: _mapController,
+            options: MapOptions(center: _center, zoom: 15),
+            children: [
+              // 1) Tile layer base con headers para evitar 403
+              TileLayer(
+                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a','b','c'],
+                tileProvider: NetworkTileProvider(headers: {
+                  'User-Agent': 'easyexpress/1.0',
+                  'Referer': 'https://your.domain.com/',
+                }),
+              ),
 
-    // 2) Ruta carretera (si ya calculaste)
-    if (_routePoints.length > 1)
-      PolylineLayer(
-        polylines: [
-          Polyline(points: _routePoints, strokeWidth: 4),
-        ],
-      ),
+              // 2) Ruta carretera (si ya calculaste)
+              if (_routePoints.length > 1)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(points: _routePoints, strokeWidth: 4),
+                  ],
+                ),
 
-    // 3) Marcadores
-    MarkerLayer(
-      markers: [
-        if (_markerPos != null)
-          Marker(
-            point: _markerPos!,
-            width: 40, height: 40,
-            builder: (_) => const Icon(Icons.person_pin_circle, size: 40, color: Colors.blue),
+              // 3) Marcadores
+              MarkerLayer(
+                markers: [
+                  if (_markerPos != null)
+                    Marker(
+                      point: _markerPos!,
+                      width: 40, height: 40,
+                      builder: (_) => const Icon(Icons.person_pin_circle, size: 40, color: Colors.blue),
+                    ),
+                  for (final locPt in locals)
+                    Marker(
+                      point: locPt,
+                      width: 30, height: 30,
+                      builder: (_) => const Icon(Icons.store, size: 30, color: Colors.green),
+                    ),
+                  if (customerPt != null)
+                    Marker(
+                      point: customerPt,
+                      width: 35, height: 35,
+                      builder: (_) => const Icon(Icons.home, size: 35, color: Colors.red),
+                    ),
+                ],
+              ),
+            ],
           ),
-        for (final locPt in locals)
-          Marker(
-            point: locPt,
-            width: 30, height: 30,
-            builder: (_) => const Icon(Icons.store, size: 30, color: Colors.green),
-          ),
-        if (customerPt != null)
-          Marker(
-            point: customerPt,
-            width: 35, height: 35,
-            builder: (_) => const Icon(Icons.home, size: 35, color: Colors.red),
-          ),
-      ],
-    ),
-    
-  ],
-)
-
         ),
 
         // ─── BOTÓN “MI UBICACIÓN” ────────────────────────────────────
@@ -285,27 +325,24 @@ Future<List<LatLng>> _fetchMultiStopRoute(List<LatLng> points) async {
                                     };
                                   });
                                   // 2) preparo origin, locales y cliente
-final origin   = _markerPos ?? _center;
-final locals   = _extractLocalPoints(_selectedOrderData);
-final customer = _extractCustomerPoint(_selectedOrderData);
+                                  final origin   = _markerPos ?? _center;
+                                  final locals   = _extractLocalPoints(_selectedOrderData);
+                                  final customer = _extractCustomerPoint(_selectedOrderData);
 
-// 3) valido que tenga coords de cliente
-if (customer == null) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('Coordenadas de cliente faltantes')),
-  );
-  return;
-}
-
-// 4) trazo ruta multi‑stop: repartidor → locales… → cliente
-final ruta = await _fetchMultiStopRoute(
-  [origin, ...locals, customer],
-);
-setState(() => _routePoints = ruta);
-
-// 5) cambio a pestaña detalles
-setState(() => _currentIndex = 1);
-
+                                  // 3) valido que tenga coords de cliente
+                                  if (customer == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Coordenadas de cliente faltantes')),
+                                  );
+                                  return;
+                                  }
+                                  // 4) trazo ruta multi‑stop: repartidor → locales… → cliente
+                                  final ruta = await _fetchMultiStopRoute(
+                                    [origin, ...locals, customer],
+                                  );
+                                  setState(() => _routePoints = ruta);
+                                 // 5) cambio a pestaña detalles
+                                  setState(() => _currentIndex = 1);
                                   
                                 },
                           style: ElevatedButton.styleFrom(
