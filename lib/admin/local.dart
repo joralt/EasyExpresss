@@ -23,6 +23,7 @@ class LocalesScreen extends StatelessWidget {
             color: Colors.black,
           ),
         ),
+        automaticallyImplyLeading: false, 
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: IconThemeData(color: Colors.black),

@@ -13,9 +13,11 @@ class SupportMessagesScreen extends StatelessWidget {
           'Soporte Técnico',
           style: TextStyle(
             fontWeight: FontWeight.bold,
+            fontSize: 24,
             color: Colors.black,
           ),
         ),
+        automaticallyImplyLeading: false, 
         backgroundColor: Colors.grey[100],
         elevation: 0,
         iconTheme: IconThemeData(color: Colors.black),

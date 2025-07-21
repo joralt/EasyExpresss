@@ -178,7 +178,9 @@ class UsuariosScreen extends StatelessWidget {
           'Gestión de Usuarios',
           style: TextStyle(
               fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
+              
         ),
+        automaticallyImplyLeading: false, 
         backgroundColor: Colors.grey[100],
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),

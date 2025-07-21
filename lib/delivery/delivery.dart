@@ -40,7 +40,6 @@ class _RepartidorAppState extends State<RepartidorApp> {
     });
   }
 
-  // Función para obtener la ubicación del repartidor
   Future<void> _locateMe() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -73,21 +72,23 @@ class _RepartidorAppState extends State<RepartidorApp> {
     }
   }
 
-  // Función que llama a la API para obtener la ruta entre dos puntos
+  // Función para obtener la ruta con paradas en los locales
   Future<void> _fetchRoadRoute(LatLng start, LatLng end) async {
-    final coords = '${start.longitude},${start.latitude};${end.longitude},${end.latitude}';
+    final locals = _extractLocalPoints(_selectedOrderData);  // Obtener los locales
+    final allPoints = [start, ...locals, end]; // Crear la lista de puntos (inicio, locales, destino)
+
+    final coords = allPoints.map((p) => '${p.longitude},${p.latitude}').join(';');  // Crear la cadena con coordenadas
     final url = Uri.parse(
       'https://router.project-osrm.org/route/v1/driving/$coords?overview=full&geometries=geojson',
     );
     final res = await http.get(url);
 
-    // Verificar el estado de la respuesta
     if (res.statusCode != 200) {
       throw Exception('OSRM error ${res.statusCode}');
     }
 
     final data = json.decode(res.body);
-    print('Ruta recibida: $data'); // Esto te permite ver la respuesta completa de la API
+    print('Ruta recibida: $data');  // Ver la respuesta completa
 
     if (data['routes'] != null && data['routes'].isNotEmpty) {
       final raw = data['routes'][0]['geometry']['coordinates'] as List<dynamic>;
@@ -97,15 +98,14 @@ class _RepartidorAppState extends State<RepartidorApp> {
           .toList();
 
       setState(() {
-        _routePoints = route; // Aquí estamos guardando la ruta
-        print('Ruta trazada: $_routePoints'); // Verificación de los puntos de la ruta
+        _routePoints = route; // Guardar los puntos de la ruta
+        print('Ruta trazada: $_routePoints'); // Verificación de los puntos
       });
     } else {
       print('No se recibió una ruta válida.');
     }
   }
 
-  // Función para extraer las coordenadas de los locales
   List<LatLng> _extractLocalPoints(Map<String, dynamic>? orderData) {
     final items = (orderData?['items'] as List<dynamic>?) ?? [];
     return items.cast<Map<String, dynamic>>().map((it) {
@@ -121,7 +121,6 @@ class _RepartidorAppState extends State<RepartidorApp> {
     }).whereType<LatLng>().toList();
   }
 
-  // Función para extraer las coordenadas del cliente
   LatLng? _extractCustomerPoint(Map<String, dynamic>? orderData) {
     final gp = orderData?['customerCoords'];
     if (gp is GeoPoint) {
@@ -190,7 +189,7 @@ class _RepartidorAppState extends State<RepartidorApp> {
                   'Referer': 'https://your.domain.com/',
                 }),
               ),
-              // Asegúrate de que la capa PolylineLayer está activada
+              // Asegúrate de que la capa PolylineLayer esté activa
               if (_routePoints.isNotEmpty)
                 PolylineLayer(
                   polylines: [
