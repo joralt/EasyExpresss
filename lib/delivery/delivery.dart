@@ -1,13 +1,16 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map/plugin_api.dart'; // Necesario para PolylineLayerOptions, MarkerLayerOptions...
+import 'package:flutter_map/plugin_api.dart'; 
 import 'package:latlong2/latlong.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import '../orders_tab.dart';
+import 'pedido_detalle.dart';
+import 'history.dart';
+import 'account.dart';
 
 class RepartidorApp extends StatefulWidget {
   final Map<String, dynamic> repartidorData;
@@ -24,7 +27,6 @@ class _RepartidorAppState extends State<RepartidorApp> {
   Map<String, dynamic>? _selectedOrderData;
   final _pedidosRef = FirebaseFirestore.instance.collection('PEDIDOS');
 
-  // Control del mapa
   final MapController _mapController = MapController();
   LatLng _center = LatLng(-0.9337, -79.2044);
   LatLng? _markerPos;
@@ -33,13 +35,12 @@ class _RepartidorAppState extends State<RepartidorApp> {
   @override
   void initState() {
     super.initState();
-    // Centrar al iniciar
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _mapController.move(_center, 15);
     });
   }
 
-  /// Obtiene la posición actual del repartidor
+  // Función para obtener la ubicación del repartidor
   Future<void> _locateMe() async {
     if (!await Geolocator.isLocationServiceEnabled()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,47 +63,49 @@ class _RepartidorAppState extends State<RepartidorApp> {
       _markerPos = me;
       _mapController.move(me, 17);
     });
+
+    // Llamar a la función para obtener la ruta
+    if (_selectedOrderData != null) {
+      LatLng? destination = _extractCustomerPoint(_selectedOrderData);
+      if (destination != null) {
+        _fetchRoadRoute(_center, destination);
+      }
+    }
   }
 
-  /// Llama al servicio OSRM para trazar la ruta carretera
-  Future<List<LatLng>> _fetchRoadRoute(LatLng start, LatLng end) async {
-    final coords =
-        '${start.longitude},${start.latitude};${end.longitude},${end.latitude}';
+  // Función que llama a la API para obtener la ruta entre dos puntos
+  Future<void> _fetchRoadRoute(LatLng start, LatLng end) async {
+    final coords = '${start.longitude},${start.latitude};${end.longitude},${end.latitude}';
     final url = Uri.parse(
-      'https://router.project-osrm.org/route/v1/driving/$coords'
-      '?overview=full&geometries=geojson',
+      'https://router.project-osrm.org/route/v1/driving/$coords?overview=full&geometries=geojson',
     );
     final res = await http.get(url);
+
+    // Verificar el estado de la respuesta
     if (res.statusCode != 200) {
       throw Exception('OSRM error ${res.statusCode}');
     }
-    final data = json.decode(res.body);
-    final raw = data['routes'][0]['geometry']['coordinates'] as List<dynamic>;
-    return raw
-        .map((c) =>
-            LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
-        .toList();
-  }
 
-  /// Ruta con paradas intermedias
-  Future<List<LatLng>> _fetchMultiStopRoute(List<LatLng> points) async {
-    final coords = points.map((p) => '${p.longitude},${p.latitude}').join(';');
-    final url = Uri.parse(
-      'https://router.project-osrm.org/route/v1/driving/$coords'
-      '?overview=full&geometries=geojson&overview=full'
-    );
-    final res = await http.get(url);
-    if (res.statusCode != 200) {
-      throw Exception('OSRM error ${res.statusCode}');
+    final data = json.decode(res.body);
+    print('Ruta recibida: $data'); // Esto te permite ver la respuesta completa de la API
+
+    if (data['routes'] != null && data['routes'].isNotEmpty) {
+      final raw = data['routes'][0]['geometry']['coordinates'] as List<dynamic>;
+
+      final route = raw
+          .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
+          .toList();
+
+      setState(() {
+        _routePoints = route; // Aquí estamos guardando la ruta
+        print('Ruta trazada: $_routePoints'); // Verificación de los puntos de la ruta
+      });
+    } else {
+      print('No se recibió una ruta válida.');
     }
-    final data = json.decode(res.body);
-    final raw = data['routes'][0]['geometry']['coordinates'] as List;
-    return raw
-        .map((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()))
-        .toList();
   }
 
-  /// Extrae las coordenadas de todos los locales de orderData['items']
+  // Función para extraer las coordenadas de los locales
   List<LatLng> _extractLocalPoints(Map<String, dynamic>? orderData) {
     final items = (orderData?['items'] as List<dynamic>?) ?? [];
     return items.cast<Map<String, dynamic>>().map((it) {
@@ -118,7 +121,7 @@ class _RepartidorAppState extends State<RepartidorApp> {
     }).whereType<LatLng>().toList();
   }
 
-  /// Extrae la ubicación del cliente desde el campo 'customerCoords'
+  // Función para extraer las coordenadas del cliente
   LatLng? _extractCustomerPoint(Map<String, dynamic>? orderData) {
     final gp = orderData?['customerCoords'];
     if (gp is GeoPoint) {
@@ -131,80 +134,73 @@ class _RepartidorAppState extends State<RepartidorApp> {
     return null;
   }
 
-void _aceptarPedido(int index) async {
-  final pedido = PedidosScreen.pedidosActuales[index];
+  // Función para aceptar el pedido
+  void _aceptarPedido(int index) async {
+    final pedido = PedidosScreen.pedidosActuales[index];
 
-  // Cambiar el estado del pedido a "En camino"
-  pedido['status'] = 'En camino';
+    pedido['status'] = 'En camino';
 
-  // Obtener el nombre del repartidor desde la colección 'usuarios'
-  final userId = FirebaseAuth.instance.currentUser?.uid;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
 
-  if (userId != null) {
-    // Obtener el nombre del repartidor desde Firestore
-    final repartidorDoc = await FirebaseFirestore.instance
-        .collection('usuarios')
-        .doc(userId)
-        .get();
+    if (userId != null) {
+      final repartidorDoc = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(userId)
+          .get();
 
-    if (repartidorDoc.exists) {
-      final repartidorName = repartidorDoc.data()?['displayName'] ?? 'Repartidor';
-      
-      // Asignar el nombre del repartidor al pedido
-      pedido['repartidor'] = repartidorName;
+      if (repartidorDoc.exists) {
+        final repartidorName = repartidorDoc.data()?['displayName'] ?? 'Repartidor';
 
-      // Actualizar el pedido en Firestore
-      await FirebaseFirestore.instance
-          .collection('PEDIDOS')
-          .doc(pedido['id'])
-          .update({
-            'status': 'En camino',
-            'repartidor': repartidorName,
-          });
+        pedido['repartidor'] = repartidorName;
 
-      // Actualizar la lista de pedidos actuales
-      setState(() {
-        PedidosScreen.pedidosActuales[index] = pedido;
-      });
-    } else {
-      print('El repartidor no existe en la base de datos');
+        await FirebaseFirestore.instance
+            .collection('PEDIDOS')
+            .doc(pedido['id'])
+            .update({
+              'status': 'En camino',
+              'repartidor': repartidorName,
+            });
+
+        setState(() {
+          PedidosScreen.pedidosActuales[index] = pedido;
+        });
+      } else {
+        print('El repartidor no existe en la base de datos');
+      }
     }
   }
-}
 
-
-
+  // Función para construir la vista principal
   Widget _buildHomeTab() {
     final locals = _extractLocalPoints(_selectedOrderData);
     final customerPt = _extractCustomerPoint(_selectedOrderData);
 
     return Stack(
       children: [
-        // ─── MAPA PRINCIPAL ─────────────────────────────────────────
         Positioned.fill(
           child: FlutterMap(
             mapController: _mapController,
             options: MapOptions(center: _center, zoom: 15),
             children: [
-              // 1) Tile layer base con headers para evitar 403
               TileLayer(
                 urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                subdomains: const ['a','b','c'],
+                subdomains: const ['a', 'b', 'c'],
                 tileProvider: NetworkTileProvider(headers: {
                   'User-Agent': 'easyexpress/1.0',
                   'Referer': 'https://your.domain.com/',
                 }),
               ),
-
-              // 2) Ruta carretera (si ya calculaste)
-              if (_routePoints.length > 1)
+              // Asegúrate de que la capa PolylineLayer está activada
+              if (_routePoints.isNotEmpty)
                 PolylineLayer(
                   polylines: [
-                    Polyline(points: _routePoints, strokeWidth: 4),
+                    Polyline(
+                      points: _routePoints, // Puntos de la ruta calculada
+                      strokeWidth: 4,  // Establece el grosor de la línea de la ruta
+                      color: Colors.blue, // Establece el color de la línea de la ruta
+                    ),
                   ],
                 ),
-
-              // 3) Marcadores
               MarkerLayer(
                 markers: [
                   if (_markerPos != null)
@@ -230,8 +226,6 @@ void _aceptarPedido(int index) async {
             ],
           ),
         ),
-
-        // ─── BOTÓN “MI UBICACIÓN” ────────────────────────────────────
         Positioned(
           top: 16,
           right: 16,
@@ -241,43 +235,47 @@ void _aceptarPedido(int index) async {
             child: const Icon(Icons.my_location),
           ),
         ),
-
-        // ─── BOTÓN INICIAR / TERMINAR JORNADA ────────────────────────
         Positioned(
           bottom: 80,
           left: 16,
           right: 16,
           child: ElevatedButton.icon(
             icon: Icon(_jornadaActiva ? Icons.stop : Icons.play_arrow),
-            label: Text(
-                _jornadaActiva ? 'Terminar jornada' : 'Iniciar jornada'),
+            label: Text(_jornadaActiva ? 'Terminar jornada' : 'Iniciar jornada'),
             style: ElevatedButton.styleFrom(
-              backgroundColor:
-                  _jornadaActiva ? Colors.red : Colors.green,
+              backgroundColor: _jornadaActiva ? Colors.red : Colors.green,
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            onPressed: () =>
-                setState(() => _jornadaActiva = !_jornadaActiva),
+            onPressed: () async {
+              setState(() {
+                _jornadaActiva = !_jornadaActiva;
+              });
+
+              // Aquí se llama a _locateMe() para obtener la ubicación actual
+              await _locateMe();
+
+              // Llamar a la función de obtener ruta desde la ubicación actual
+              if (_selectedOrderData != null) {
+                LatLng? destination = _extractCustomerPoint(_selectedOrderData);
+                if (destination != null) {
+                  // Primero obtener ruta desde la ubicación actual
+                  _fetchRoadRoute(_center, destination);
+                }
+              }
+            },
           ),
         ),
-
-        // ─── LISTA DE PEDIDOS PENDIENTES ─────────────────────────────
         if (_jornadaActiva)
           Positioned(
             top: 80,
             left: 16,
             right: 16,
             child: StreamBuilder<QuerySnapshot>(
-              stream: _pedidosRef
-                  .where('status', isEqualTo: 'En preparación')
-                  .snapshots(),
+              stream: _pedidosRef.where('status', isEqualTo: 'En preparación').snapshots(),
               builder: (ctx, snap) {
-                if (snap.connectionState ==
-                    ConnectionState.waiting) {
-                  return const Center(
-                      child: CircularProgressIndicator());
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
                 }
                 final docs = snap.data?.docs ?? [];
                 if (docs.isEmpty) {
@@ -291,70 +289,24 @@ void _aceptarPedido(int index) async {
                 }
                 return Column(
                   children: docs.map((doc) {
-                    final data =
-                        doc.data()! as Map<String, dynamic>;
+                    final data = doc.data()! as Map<String, dynamic>;
                     final pid = doc.id;
-                    final inProg = pid == _selectedOrderId;
-                    final email = data['customerEmail']
-                            as String? ??
-                        'Cliente';
+                    final email = data['customerEmail'] as String? ?? 'Cliente';
                     return Card(
-                      margin:
-                          const EdgeInsets.only(bottom: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(12)),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: ListTile(
                         title: Text('Pedido de $email'),
-                        subtitle: Text(
-                            'Estado: ${inProg ? 'En curso' : data['status']}'),
+                        subtitle: Text('Estado: ${data['status']}'),
                         trailing: ElevatedButton(
-                          onPressed: inProg
-                              ? null
-                              : () async {
-                                  // 1) marco pedido en curso
-                                  await _pedidosRef
-                                      .doc(pid)
-                                      .update({'status': 'En curso'});
-                                  // 2) guardo datos y trazo ruta
-                                  setState(() {
-                                    _selectedOrderId = pid;
-                                    _selectedOrderData = {
-                                      'id': pid,
-                                      ...data
-                                    };
-                                  });
-                                  // 2) preparo origin, locales y cliente
-                                  final origin   = _markerPos ?? _center;
-                                  final locals   = _extractLocalPoints(_selectedOrderData);
-                                  final customer = _extractCustomerPoint(_selectedOrderData);
-
-                                  // 3) valido que tenga coords de cliente
-                                  if (customer == null) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Coordenadas de cliente faltantes')),
-                                  );
-                                  return;
-                                  }
-                                  // 4) trazo ruta multi‑stop: repartidor → locales… → cliente
-                                  final ruta = await _fetchMultiStopRoute(
-                                    [origin, ...locals, customer],
-                                  );
-                                  setState(() => _routePoints = ruta);
-                                 // 5) cambio a pestaña detalles
-                                  setState(() => _currentIndex = 1);
-                                  
-                                },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: inProg
-                                ? Colors.grey
-                                : Colors.green,
-                            shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(20)),
-                          ),
-                          child: Text(
-                              inProg ? 'En curso' : 'Aceptar'),
+                          onPressed: () async {
+                            await _pedidosRef.doc(pid).update({'status': 'En curso'});
+                            setState(() {
+                              _selectedOrderId = pid;
+                              _selectedOrderData = {'id': pid, ...data};
+                            });
+                          },
+                          child: Text('Aceptar'),
                         ),
                       ),
                     );
@@ -369,102 +321,64 @@ void _aceptarPedido(int index) async {
 
   Widget _buildPedidosTab() {
     if (_selectedOrderData != null) {
-      return PedidoDetalleScreen(
-        pedidoId: _selectedOrderId!,
-        pedidoData: _selectedOrderData!,
-      );
+      return PedidoDetalleScreen(pedidoId: _selectedOrderId!, pedidoData: _selectedOrderData!);
     }
-    return const Center(
-        child: Text('Selecciona un pedido en Inicio'));
+    return const Center(child: Text('Selecciona un pedido en Inicio'));
   }
 
   @override
   Widget build(BuildContext context) {
-    final name =
-        widget.repartidorData['nombre'] as String? ?? '';
+    final name = widget.repartidorData['nombre'] as String? ?? '';
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Bienvenido, $name'),
-        backgroundColor: Colors.green,
-        centerTitle: true,
-      ),
+      appBar: _currentIndex == 0 // Solo en la sección de Inicio
+          ? AppBar(
+              title: Text('Bienvenido, $name'),
+              backgroundColor: const Color(0xFF6F35A5),
+              centerTitle: true,
+                      automaticallyImplyLeading: false, 
+            )
+          : null,
       body: IndexedStack(
         index: _currentIndex,
-        children: [_buildHomeTab(), _buildPedidosTab()],
+        children: [
+          _buildHomeTab(),
+          _buildPedidosTab(),
+          const HistorialPedidosScreen(), // Historial de pedidos
+          CuentaScreen(                     // Sección de Cuenta
+            userName: widget.repartidorData['nombre'] ?? '',
+            userEmail: widget.repartidorData['email'] ?? '',
+            userPhone: widget.repartidorData['phone'] ?? '',
+          )
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
         items: const [
           BottomNavigationBarItem(
-              icon: Icon(Icons.home), label: 'Inicio'),
+            icon: Icon(Icons.home, color: Colors.purple),
+            label: 'Inicio',
+          ),
           BottomNavigationBarItem(
-              icon: Icon(Icons.list), label: 'Pedidos'),
+            icon: Icon(Icons.list, color: Colors.blue),
+            label: 'Pedidos',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.history, color: Colors.orange),
+            label: 'Historial',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_circle, color: Colors.green),
+            label: 'Cuenta',
+          ),
         ],
+         selectedItemColor: Colors.black,  // Esto hace que el texto del icono seleccionado sea negro
+         unselectedItemColor: Colors.black, // Esto hace que el texto de los iconos no seleccionados sea negro
       ),
-    );
-  }
-}
-
-class PedidoDetalleScreen extends StatelessWidget {
-  final String pedidoId;
-  final Map<String, dynamic> pedidoData;
-
-  const PedidoDetalleScreen(
-      {Key? key, required this.pedidoId, required this.pedidoData})
-      : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final data = pedidoData;
-    final customerName =
-        data['customerName'] as String? ?? 'Cliente';
-    final customerPhone =
-        data['customerPhone'] as String? ?? '';
-    final customerAddress =
-        data['customerAddress'] as String? ?? '';
-    final status = data['status'] as String? ?? '—';
-    final subtotal = data['subtotal'] as num? ?? 0;
-    final envio = data['envio'] as num? ?? 0;
-    final total = data['total'] as num? ?? 0;
-    final items =
-        (data['items'] as List).cast<Map<String, dynamic>>();
-
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        ListTile(
-          leading: CircleAvatar(
-              backgroundImage: NetworkImage(
-                  data['customerPhoto'] ??
-                      'https://via.placeholder.com/48')),
-          title: Text('Pedido de: $customerName',
-              style:
-                  const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text('Tel: $customerPhone'),
-        ),
-        const Divider(),
-        Text('📍 Dirección Cliente: $customerAddress'),
-        const SizedBox(height: 8),
-        Text('📦 Estado: $status',
-            style: const TextStyle(color: Colors.orange)),
-        const SizedBox(height: 8),
-        Text('Subtotal: \$${subtotal.toStringAsFixed(2)}'),
-        Text('Costo de Envío: \$${envio.toStringAsFixed(2)}'),
-        Text('Total: \$${total.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.bold)),
-        const Divider(),
-        const Text('🍴 Platos:',
-            style:
-                TextStyle(fontWeight: FontWeight.bold)),
-        ...items.map((it) => ListTile(
-              leading: Image.network(it['imagenUrl'],
-                  width: 48, height: 48, fit: BoxFit.cover),
-              title: Text(it['nombre']),
-              subtitle: Text(
-                  'Precio: \$${it['precio']} x ${it['qty']}'),
-            )),
-      ],
     );
   }
 }

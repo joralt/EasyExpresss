@@ -65,10 +65,10 @@ class _AccountTabState extends State<AccountTab> {
         final displayName = data['displayName'] as String? ?? 'Usuario';
         final email       = data['email']       as String? ?? '';
         final photoURL    = data['photoURL']    as String? ?? '';
-        final geo         = data['location']    as GeoPoint?;
-        final address     = geo != null
-            ? '${geo.latitude.toStringAsFixed(5)}, ${geo.longitude.toStringAsFixed(5)}'
-            : 'Dirección no disponible';
+       // final geo         = data['location']    as GeoPoint?;
+     //   final address     = geo != null
+           // ? '${geo.latitude.toStringAsFixed(5)}, ${geo.longitude.toStringAsFixed(5)}'
+           // : 'Dirección no disponible';
 
         // Envolver todo en GestureDetector para desenfocar al tocar fuera
         return GestureDetector(
@@ -102,7 +102,7 @@ class _AccountTabState extends State<AccountTab> {
                       const SizedBox(height: 4),
                       Text(email, style: const TextStyle(fontSize: 14, color: Colors.black54)),
                       const SizedBox(height: 2),
-                      Text(address, style: const TextStyle(fontSize: 14, color: Colors.black54)),
+                     // Text(address, style: const TextStyle(fontSize: 14, color: Colors.black54)),
                     ],
                   ),
                 ),
@@ -118,11 +118,11 @@ class _AccountTabState extends State<AccountTab> {
                         label: 'Mis datos personales',
                         onTap: () => _navigate(const UserDetailsScreen()),
                       ),
-                      _buildOption(
-                        icon: Icons.location_on_outlined,
-                        label: 'Mis direcciones',
-                        onTap: () => _navigate(const AddressesScreen()),
-                      ),
+                      //_buildOption(
+                       //icon: Icons.location_on_outlined,
+                        //label: 'Mis direcciones',
+                        //onTap: () => _navigate(const AddressesScreen()),
+                      //),
                       _buildOption(
                         icon: Icons.notifications_none,
                         label: 'Notificaciones',

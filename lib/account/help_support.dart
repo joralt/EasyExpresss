@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HelpSupportScreen extends StatefulWidget {
   const HelpSupportScreen({Key? key}) : super(key: key);
@@ -14,6 +16,38 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _saveComment() async {
+    if (_controller.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Por favor, escribe un comentario')),
+      );
+      return;
+    }
+
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid ?? 'anonimo'; // Obtener el ID de usuario (o "anonimo" si no está autenticado)
+      final comment = _controller.text;
+
+      // Guardar en la colección SUPPORT_MESSAGES de Firestore
+      await FirebaseFirestore.instance.collection('SUPPORT_MESSAGES').add({
+        'userId': userId,
+        'message': comment,
+        'timestamp': FieldValue.serverTimestamp(), // Marca de tiempo
+      });
+
+      // Limpiar el campo de texto después de enviar
+      _controller.clear();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Comentario enviado con éxito')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Hubo un error al enviar el comentario')),
+      );
+    }
   }
 
   @override
@@ -55,9 +89,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () {
-                  // TODO: enviar consulta
-                },
+                onPressed: _saveComment, // Enviar comentario
                 child: const Text('Enviar'),
               ),
             ),
