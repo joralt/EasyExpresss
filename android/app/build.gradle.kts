@@ -25,7 +25,7 @@ android {
         applicationId = "com.example.easyexpres"
 
         // ✅ minSdk actualizado a 23 por requerimiento de firebase-auth 23.x
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
 
         versionCode = flutter.versionCode

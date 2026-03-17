@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "335803116123",
+    "firebase_url": "https://easyexpress-e7856-default-rtdb.firebaseio.com",
     "project_id": "easyexpress-e7856",
     "storage_bucket": "easyexpress-e7856.firebasestorage.app"
   },
@@ -13,6 +14,14 @@
         }
       },
       "oauth_client": [
+        {
+          "client_id": "335803116123-29jv98lr490l5o820gnv8s9outhtbl56.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.easyexpres",
+            "certificate_hash": "362dcf9f288eefc00ea4f946ad0eb81024327792"
+          }
+        },
         {
           "client_id": "335803116123-iq80oququq07mauh6qu08op5cvglp8gk.apps.googleusercontent.com",
           "client_type": 1,

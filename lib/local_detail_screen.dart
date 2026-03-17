@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
+import 'cart_provider.dart';
+import 'car.dart'; 
 
 class LocalDetailScreen extends StatelessWidget {
   final String localId;
@@ -113,6 +116,40 @@ class LocalDetailScreen extends StatelessWidget {
                                 style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                             ],
+                          ),
+                        ),
+                      ),
+                      
+                      // Botón Añadir
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: CircleAvatar(
+                          backgroundColor: const Color(0xFF228B22).withOpacity(0.1),
+                          child: IconButton(
+                            icon: const Icon(Icons.add, color: Color(0xFF228B22)),
+                            onPressed: () {
+                              final cart = Provider.of<CartProvider>(context, listen: false);
+                              cart.addItem(
+                                docs[i].id,
+                                nombre,
+                                precio.toDouble(),
+                                imagenUrl,
+                              );
+                              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('$nombre añadido'),
+                                  duration: const Duration(seconds: 2),
+                                  action: SnackBarAction(
+                                    label: 'CARRITO',
+                                    onPressed: () async {
+                                      final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const CartScreen()));
+                                      if (result == 'ver_pedidos') Navigator.pop(context, 'ver_pedidos');
+                                    },
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ),

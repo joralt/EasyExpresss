@@ -41,15 +41,18 @@ class CategoriaScreen extends StatelessWidget {
               final categoria = data['Categoria'] as String? ?? '';
 
               return GestureDetector(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => LocalDetailScreen(
-                      localId: docs[i].id,
-                      localName: nombre,
+                onTap: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => LocalDetailScreen(
+                        localId: docs[i].id,
+                        localName: nombre,
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                  if (result == 'ver_pedidos') Navigator.pop(context, 'ver_pedidos');
+                },
                 child: Card(
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Row(

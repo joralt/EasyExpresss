@@ -5,8 +5,9 @@ import 'local_detail_screen.dart';
 class FavoritosScreen extends StatefulWidget {
   static List<Map<String, String>> localesFavoritos   = [];
   static List<Map<String, String>> productosFavoritos = [];
+  final VoidCallback? onOrderConfirmed;
 
-  const FavoritosScreen({Key? key}) : super(key: key);
+  const FavoritosScreen({Key? key, this.onOrderConfirmed}) : super(key: key);
   @override
   _FavoritosScreenState createState() => _FavoritosScreenState();
 }
@@ -63,13 +64,16 @@ class _FavoritosScreenState extends State<FavoritosScreen>
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  onTap: () {
-                    Navigator.push(context, MaterialPageRoute(
+                  onTap: () async {
+                    final result = await Navigator.push(context, MaterialPageRoute(
                       builder: (_) => LocalDetailScreen(
                         localId: m['id']!,
                         localName: m['nombre']!,
                       ),
                     ));
+                    if (result == 'ver_pedidos' && widget.onOrderConfirmed != null) {
+                      widget.onOrderConfirmed!();
+                    }
                   },
                 ),
               ),

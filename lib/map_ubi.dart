@@ -126,7 +126,13 @@ class _MapInfoPageState extends State<MapInfoPage> {
               onTap: (_, latlng) => setState(() => _markerPos = latlng),
             ),
             children: [
-              TileLayer(urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', subdomains: const ['a','b','c']),
+              TileLayer(
+                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                subdomains: const ['a','b','c'],
+                additionalOptions: const {
+                  'userAgent': 'com.example.easyexpres',
+                },
+              ),
               if (_markerPos != null)
                 MarkerLayer(markers: [Marker(point: _markerPos!, width:40, height:40, builder: (_)=> const Icon(Icons.location_on, size:40, color:Colors.red))]),
             ],

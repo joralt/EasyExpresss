@@ -7,6 +7,7 @@ import 'help_support.dart';
 import 'notifications.dart';
 import 'addresses.dart';
 import 'user_details.dart';
+import '../delivery/delivery.dart';
 
 class AccountTab extends StatefulWidget {
   const AccountTab({Key? key}) : super(key: key);
@@ -127,6 +128,13 @@ class _AccountTabState extends State<AccountTab> {
                         icon: Icons.notifications_none,
                         label: 'Notificaciones',
                         onTap: () => _navigate(const NotificationsScreen()),
+                      ),
+                      _buildOption(
+                        icon: Icons.local_shipping_outlined,
+                        label: 'Modo Repartidor',
+                        iconColor: const Color(0xFF228B22),
+                        labelColor: const Color(0xFF228B22),
+                        onTap: () => _navigate(const DeliveryDashboard()),
                       ),
                       _buildOption(
                         icon: Icons.delete_outline,
